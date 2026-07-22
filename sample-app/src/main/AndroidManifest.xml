@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <!--
+            TomTom Orbis Maps の API キー。
+            secrets-gradle-plugin が secrets.properties の TOMTOM_API_KEY を
+            ${TOMTOM_API_KEY} プレースホルダへ注入する。
+            meta-data 名は TomTomInitSDK.tomtomApiKey が読む "TOMTOM_API_KEY"。
+        -->
+        <meta-data
+            android:name="TOMTOM_API_KEY"
+            android:value="${TOMTOM_API_KEY}" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

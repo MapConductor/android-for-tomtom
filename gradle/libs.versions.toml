@@ -1,0 +1,46 @@
+[versions]
+agp = "9.2.1"
+kotlin = "2.0.21"
+
+composeBom = "2025.02.00"
+lifecycleRuntimeKtx = "2.8.7"
+# TomTom Orbis Maps Display SDK
+# 参照: https://developer.tomtom.com/android/maps/documentation
+tomtomMaps = "1.26.7"
+activityCompose = "1.9.3"
+ktLint = "14.2.0"
+
+junit = "4.13.2"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
+
+[libraries]
+# Jetpack Compose (with BOM)
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+
+# Lifecycle
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-lifecycle-common-java8 = { group = "androidx.lifecycle", name = "lifecycle-common-java8", version.ref = "lifecycleRuntimeKtx" }
+
+# TomTom Orbis Maps Display SDK
+tomtom-map-display = { group = "com.tomtom.sdk.maps", name = "map-display", version.ref = "tomtomMaps" }
+
+# Sample app
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+
+# Test
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+jlleitschuh-ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktLint" }
