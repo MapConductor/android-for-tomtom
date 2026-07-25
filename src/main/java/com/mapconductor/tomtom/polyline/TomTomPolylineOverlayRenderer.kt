@@ -1,7 +1,6 @@
 package com.mapconductor.tomtom.polyline
 
 import androidx.compose.ui.graphics.toArgb
-import com.mapconductor.core.ResourceProvider
 import com.mapconductor.core.features.GeoPoint
 import com.mapconductor.core.features.GeoPointInterface
 import com.mapconductor.core.polyline.AbstractPolylineOverlayRenderer
@@ -42,7 +41,9 @@ class TomTomPolylineOverlayRenderer(
     private fun maxSegmentLengthMeters(): Double {
         val zoom = holder.map.cameraPosition.zoom
         val metersPerPixel = Earth.CIRCUMFERENCE_METERS / (256.0 * 2.0.pow(zoom))
-        return metersPerPixel * 64.0
+        // 低ズーム（地球全体表示）では metersPerPixel が巨大になり、測地線の分割数が
+        // 1〜2 本まで激減してカクつく（たわむ）。滑らかさを保つため分割長に上限を設ける。
+        return (metersPerPixel * 64.0).coerceAtMost(MAX_GEODESIC_SEGMENT_METERS)
     }
 
     override suspend fun createPolyline(state: PolylineState): TomTomActualPolyline? =
@@ -51,7 +52,11 @@ class TomTomPolylineOverlayRenderer(
                 PolylineOptions(
                     coordinates = coordinates(state.points, state.geodesic),
                     lineColor = state.strokeColor.toArgb(),
-                    lineWidths = listOf(WidthByZoom(ResourceProvider.dpToPx(state.strokeWidth))),
+                    lineWidths = listOf(WidthByZoom(state.strokeWidth.value.toDouble())),
+                    // 既定 outline（DEFAULT_OUTLINE_COLOR は赤系）を無効化する。無効化しないと
+                    // 線の周りに既定 outline が描かれ、他プロバイダと色/太さが異なって見える。
+                    outlineWidths = listOf(WidthByZoom(0.0)),
+                    outlineColor = android.graphics.Color.TRANSPARENT,
                     isClickable = true,
                     tag = state.id,
                 )
@@ -74,7 +79,13 @@ class TomTomPolylineOverlayRenderer(
                 polyline.lineColor = current.state.strokeColor.toArgb()
             }
             if (finger.strokeWidth != prevFinger.strokeWidth) {
-                polyline.lineWidths = listOf(WidthByZoom(ResourceProvider.dpToPx(current.state.strokeWidth)))
+                polyline.lineWidths =
+                    listOf(
+                        WidthByZoom(
+                            current.state.strokeWidth.value
+                                .toDouble(),
+                        ),
+                    )
             }
             polyline
         }
@@ -83,5 +94,11 @@ class TomTomPolylineOverlayRenderer(
         withContext(coroutine.coroutineContext) {
             holder.map.removePolylines(tag = entity.state.id)
         }
+    }
+
+    private companion object {
+        // 測地線を滑らかに見せるための 1 セグメントあたりの最大長（m）。
+        // 例: 日本〜北米（約 8,000km）で約 160 分割となり、地球全体表示でもカクつかない。
+        private const val MAX_GEODESIC_SEGMENT_METERS = 50_000.0
     }
 }

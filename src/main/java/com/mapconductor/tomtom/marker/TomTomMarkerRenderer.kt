@@ -8,6 +8,8 @@ import com.mapconductor.tomtom.TomTomActualMarker
 import com.mapconductor.tomtom.TomTomMapViewHolder
 import com.mapconductor.tomtom.toTomTomGeoPoint
 import com.tomtom.sdk.map.display.marker.MarkerOptions
+import android.os.Handler
+import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,11 +33,24 @@ class TomTomMarkerRenderer(
     // マーカーアニメーション（画面上部からのドロップ／バウンス）を有効化する。
     override val supportsAnimationOverlay: Boolean = true
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    // TomTom のネイティブ Marker は coordinate/isVisible の更新をメインスレッドでしか許さない。
+    // これらの同期メソッドは onAnimate（ingest が Dispatchers.Default で呼ぶ）経由でも呼ばれるため、
+    // 背景スレッドから呼ばれた場合はメインへポストしてクラッシュを防ぐ。既にメインなら同期実行。
+    private inline fun runOnMain(crossinline block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
+        } else {
+            mainHandler.post { block() }
+        }
+    }
+
     override fun setMarkerVisible(
         markerEntity: MarkerEntityInterface<TomTomActualMarker>,
         visible: Boolean,
     ) {
-        markerEntity.marker?.isVisible = visible
+        runOnMain { markerEntity.marker?.isVisible = visible }
     }
 
     override fun setMarkerPosition(
@@ -43,7 +58,7 @@ class TomTomMarkerRenderer(
         position: GeoPoint,
     ) {
         // ネイティブマーカーの coordinate を直接更新する（削除→再生成しない）。
-        markerEntity.marker?.coordinate = position.toTomTomGeoPoint()
+        runOnMain { markerEntity.marker?.coordinate = position.toTomTomGeoPoint() }
     }
 
     override suspend fun onAdd(

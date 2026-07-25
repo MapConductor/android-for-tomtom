@@ -14,6 +14,7 @@ import com.mapconductor.compose.map.MapViewBase
 import com.mapconductor.core.OnCameraMoveHandler
 import com.mapconductor.core.OnMapEventHandler
 import com.mapconductor.core.OnMapLoadedHandler
+import com.mapconductor.core.map.CameraRestriction
 import com.mapconductor.core.map.MapCameraPosition
 import com.mapconductor.core.map.MapCameraPositionInterface
 import com.mapconductor.core.map.MutableMapServiceRegistry
@@ -24,8 +25,11 @@ import com.mapconductor.core.marker.MarkerRenderingSupport
 import com.mapconductor.core.marker.MarkerRenderingSupportKey
 import com.mapconductor.core.marker.MarkerTilingOptions
 import com.mapconductor.core.marker.StrategyMarkerController
+import com.mapconductor.core.tileserver.TileServerRegistry
 import com.mapconductor.tomtom.circle.TomTomCircleController
 import com.mapconductor.tomtom.circle.TomTomCircleOverlayRenderer
+import com.mapconductor.tomtom.groundimage.TomTomGroundImageController
+import com.mapconductor.tomtom.groundimage.TomTomGroundImageOverlayRenderer
 import com.mapconductor.tomtom.marker.TomTomMarkerController
 import com.mapconductor.tomtom.polygon.TomTomPolygonController
 import com.mapconductor.tomtom.polygon.TomTomPolygonOverlayRenderer
@@ -43,6 +47,7 @@ fun TomTomMapView(
     state: TomTomMapViewState,
     modifier: Modifier = Modifier,
     markerTiling: MarkerTilingOptions? = null,
+    cameraRestriction: CameraRestriction? = null,
     sdkInitialize: (suspend (android.content.Context) -> Boolean)? = null,
     onMapLoaded: OnMapLoadedHandler? = null,
     onMapClick: OnMapEventHandler? = null,
@@ -115,6 +120,13 @@ fun TomTomMapView(
                 mapController.setMapClickListener(onMapClick)
                 mapController.setMapLongClickListener(onMapLongClick)
                 mapController.setMapDesignTypeChangeListener(state::onMapDesignTypeChange)
+                cameraRestriction?.let { mapController.setCameraRestriction(it) }
+                // 大量マーカーをラスタタイル化するため、マーカータイル用ラスタレイヤーの
+                // 実体化（スタイル合成 + loadStyle）を配線する。
+                mapController.setupMarkerTileRaster(
+                    apiKey = tomtomApiKey(context),
+                    cacheDir = context.cacheDir,
+                )
                 holder.mapView.post {
                     // Style loading can reset the camera, so reapply it once the view is attached.
                     mapController.moveCamera(initialCameraPosition)
@@ -241,6 +253,15 @@ fun createTomTomMapViewController(
     markerTiling: MarkerTilingOptions = MarkerTilingOptions.Default,
     serviceRegistry: MutableMapServiceRegistry? = null,
 ): TomTomMapViewController {
+    // GroundImage はローカルタイルサーバ + 合成スタイルのラスタレイヤーで描画する。
+    // 動的な marker タイルと同様、タイルは no-store で配信する（合成スタイル再ロードで確実に refetch）。
+    val groundImageRenderer =
+        TomTomGroundImageOverlayRenderer(
+            holder = holder,
+            tileServer = TileServerRegistry.get(forceNoStoreCache = true),
+        )
+    val groundImageController = TomTomGroundImageController(renderer = groundImageRenderer)
+
     val mapController =
         TomTomMapViewController(
             holder = holder,
@@ -248,7 +269,10 @@ fun createTomTomMapViewController(
             polylineController = TomTomPolylineController(renderer = TomTomPolylineOverlayRenderer(holder)),
             polygonController = TomTomPolygonController(renderer = TomTomPolygonOverlayRenderer(holder)),
             circleController = TomTomCircleController(renderer = TomTomCircleOverlayRenderer(holder)),
+            groundImageController = groundImageController,
         )
+    // GroundImage のラスタ実体化先をマップコントローラ（合成スタイル管理）に接続する。
+    groundImageRenderer.rasterSink = mapController
 
     serviceRegistry?.let { registry ->
         registry.clear()

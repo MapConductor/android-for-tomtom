@@ -1,7 +1,6 @@
 package com.mapconductor.tomtom.circle
 
 import androidx.compose.ui.graphics.toArgb
-import com.mapconductor.core.ResourceProvider
 import com.mapconductor.core.circle.AbstractCircleOverlayRenderer
 import com.mapconductor.core.circle.CircleEntityInterface
 import com.mapconductor.core.circle.CircleState
@@ -30,7 +29,8 @@ class TomTomCircleOverlayRenderer(
     override val holder: TomTomMapViewHolder,
     override val coroutine: CoroutineScope = CoroutineScope(Dispatchers.Main),
 ) : AbstractCircleOverlayRenderer<TomTomActualCircle>() {
-    private fun strokeWidthPx(state: CircleState): Double = ResourceProvider.dpToPx(state.strokeWidth)
+    // 枠線 polyline の線幅。TomTom（Mapbox GL 系）の線幅は密度非依存（dp 相当）なので dp 値をそのまま渡す。
+    private fun strokeWidthPx(state: CircleState): Double = state.strokeWidth.value.toDouble()
 
     private fun strokeTag(state: CircleState): String = "circle-stroke-${state.id}"
 
@@ -73,6 +73,12 @@ class TomTomCircleOverlayRenderer(
                             coordinates = ringPoints(state),
                             lineColor = state.strokeColor.toArgb(),
                             lineWidths = listOf(WidthByZoom(strokeWidthPx(state))),
+                            // 既定 outline（DEFAULT_OUTLINE_COLOR は赤系）を無効化する。
+                            // 無効化しないと、半透明で細い枠線に既定 outline が滲み、青+赤で紫に見える
+                            // （他プロバイダと strokeColor がずれる原因）。幅 0 だけでは消えないため、
+                            // outline 色も透明にして確実に色が混ざらないようにする。
+                            outlineWidths = listOf(WidthByZoom(0.0)),
+                            outlineColor = android.graphics.Color.TRANSPARENT,
                             isClickable = false,
                             tag = strokeTag(state),
                         ),
