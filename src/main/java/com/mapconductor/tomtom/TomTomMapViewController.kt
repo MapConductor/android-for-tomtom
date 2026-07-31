@@ -7,6 +7,7 @@ import com.mapconductor.core.circle.OnCircleEventHandler
 import com.mapconductor.core.controller.BaseMapViewController
 import com.mapconductor.core.controller.OverlayControllerInterface
 import com.mapconductor.core.features.GeoRectBounds
+import com.mapconductor.core.groundimage.GroundImageEvent
 import com.mapconductor.core.groundimage.GroundImageState
 import com.mapconductor.core.groundimage.OnGroundImageEventHandler
 import com.mapconductor.core.map.MapCameraPosition
@@ -233,8 +234,13 @@ class TomTomMapViewController internal constructor(
         mainCoroutine.cancel()
     }
 
+    // 直近に要求した論理カメラ位置。tilt < 0 の擬似表現は SDK 側で正ピッチへ変換されるため、
+    // カメラ状態の読み戻し時に元の負tilt を復元するヒントとして保持する（MapLibre と同方針）。
+    private var lastLogicalCameraPosition: MapCameraPosition? = null
+
     override fun moveCamera(position: MapCameraPosition) {
         if (destroyed) return
+        lastLogicalCameraPosition = position
         mainCoroutine.launch {
             if (destroyed) return@launch
             holder.map.moveCamera(position.toCameraOptions())
@@ -246,6 +252,7 @@ class TomTomMapViewController internal constructor(
         duration: Long,
     ) {
         if (destroyed) return
+        lastLogicalCameraPosition = position
         mainCoroutine.launch {
             if (destroyed) return@launch
             holder.map.animateCamera(
@@ -359,6 +366,16 @@ class TomTomMapViewController internal constructor(
     }
 
     private fun onPolygonClickedInternal(polygon: Polygon) {
+        // GroundImage も画像付き native Polygon なので、Polygon 本体の id で先に識別する。
+        // state.id ではなく native id を使い、通常 Polygon と同じ tag でも誤配送しない。
+        val groundImageEntity =
+            groundImageController.groundImageManager
+                .allEntities()
+                .firstOrNull { it.groundImage.polygon.id == polygon.id }
+        if (groundImageEntity != null) {
+            groundImageController.dispatchClick(GroundImageEvent(groundImageEntity.state, lastTapPosition()))
+            return
+        }
         // ポリゴンは穴なし=native Polygon、穴あり=PolygonOverlay+輪郭Polygon で構成が異なる。
         // クリックされた native Polygon の tag（= state.id）でエンティティを引く。
         val entity =
@@ -408,7 +425,10 @@ class TomTomMapViewController internal constructor(
     }
 
     private fun getMapCameraPosition(): MapCameraPosition {
-        val camera = holder.map.cameraPosition.toMapCameraPosition()
+        val camera =
+            holder.map.cameraPosition.toMapCameraPosition(
+                logicalTiltHint = lastLogicalCameraPosition?.tilt,
+            )
         // 画面四隅を投影して visibleRegion（ビューポート）を構築する。
         // これが無いと marker-clustering がビューポートを算出できずクラスタが一切描画されない
         // （他プロバイダは getMapCameraPosition で visibleRegion を設定している）。
@@ -530,7 +550,7 @@ class TomTomMapViewController internal constructor(
 
     // ---- ラスタレイヤーの実体化（compose + loadStyle） ------------------------------------
     //
-    // TomTom には実行時の addLayer/addSource が無いため、マーカータイル・GroundImage など複数の
+    // TomTom には実行時の addLayer/addSource が無いため、マーカータイルなど複数の
     // ラスタレイヤーを「フル browsing スタイル + TomTom ラスタ地図(可視ベース) + 各ラスタレイヤー」を
     // 合成して loadStyle することで実体化する（[TomTomStyleComposer] 参照）。ラスタが 0 枚になれば
     // 通常のデザインスタイル（ベクタ）へ戻す。
@@ -564,7 +584,7 @@ class TomTomMapViewController internal constructor(
     }
 
     // 公開 RasterLayer オーバーレイ（サンプルの RasterLayer(state)）経由で追加された id を追跡する。
-    // マーカータイル/GroundImage 用の内部ラスタと区別し、それらを誤って消さないようにする。
+    // マーカータイル用の内部ラスタと区別し、それを誤って消さないようにする。
     private val publicRasterLayerIds = mutableSetOf<String>()
 
     override suspend fun compositionRasterLayers(data: List<RasterLayerState>) {
@@ -668,7 +688,10 @@ class TomTomMapViewController internal constructor(
             // loadStyle はカメラをリセットし、その状態だと再ロード後に現在ビューポートの
             // タイル取得がトリガーされず地図が空白のままになる。ロード完了後に現在カメラを
             // 再適用してタイル取得を促す（マーカータイリングの初期化と同じ対処）。
-            val currentCamera = holder.map.cameraPosition.toMapCameraPosition()
+            val currentCamera =
+                holder.map.cameraPosition.toMapCameraPosition(
+                    logicalTiltHint = lastLogicalCameraPosition?.tilt,
+                )
             holder.map.loadStyle(
                 StyleDescriptor(uri, uri),
                 object : StyleLoadingCallback {
@@ -708,7 +731,7 @@ class TomTomMapViewController internal constructor(
             }
         }
 
-    // ---- GroundImage（ラスタレイヤー方式で描画） --------------------------------------------
+    // ---- GroundImage（画像付き native Polygon で描画） --------------------------------------
 
     override suspend fun compositionGroundImages(data: List<GroundImageState>) = groundImageController.add(data)
 

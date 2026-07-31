@@ -7,7 +7,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.mapconductor.compose.map.MapViewBase
@@ -25,7 +24,6 @@ import com.mapconductor.core.marker.MarkerRenderingSupport
 import com.mapconductor.core.marker.MarkerRenderingSupportKey
 import com.mapconductor.core.marker.MarkerTilingOptions
 import com.mapconductor.core.marker.StrategyMarkerController
-import com.mapconductor.core.tileserver.TileServerRegistry
 import com.mapconductor.tomtom.circle.TomTomCircleController
 import com.mapconductor.tomtom.circle.TomTomCircleOverlayRenderer
 import com.mapconductor.tomtom.groundimage.TomTomGroundImageController
@@ -35,9 +33,11 @@ import com.mapconductor.tomtom.polygon.TomTomPolygonController
 import com.mapconductor.tomtom.polygon.TomTomPolygonOverlayRenderer
 import com.mapconductor.tomtom.polyline.TomTomPolylineController
 import com.mapconductor.tomtom.polyline.TomTomPolylineOverlayRenderer
+import com.tomtom.sdk.location.GeoPoint
 import com.tomtom.sdk.map.display.MapOptions
+import com.tomtom.sdk.map.display.camera.CameraOptions
+import com.tomtom.sdk.map.display.style.StandardStyles
 import com.tomtom.sdk.map.display.ui.MapView
-import android.view.ViewGroup
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -60,33 +60,64 @@ fun TomTomMapView(
     val scope = remember { TomTomMapViewScope() }
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val mapLifecycle = remember { TomTomMapLifecycle() }
     val registry = remember { scope.buildRegistry() }
     val serviceRegistry = remember { MutableMapServiceRegistry() }
     val cameraState = remember { mutableStateOf<MapCameraPositionInterface?>(state.cameraPosition) }
     val initialCameraPosition = remember(state) { MapCameraPosition.from(state.cameraPosition) }
+    // TomTom の MapView は composition 側（remember）で生成して単一インスタンスに固定する。
+    // viewProvider（SubcomposeLayout の計測フェーズ）で生成すると、ライフサイクル observer が
+    // 追加される時点で MapView が未生成となり、onStart/onResume が MapView に届かず地図が
+    // 描画されない（View だけ出てタイルが出ない）。tmp の動作実装と同じ構成にする。
+    val mapView =
+        remember {
+            val options =
+                MapOptions(
+                    mapKey = tomtomApiKey(context),
+                    // Compose の SubcomposeLayout 内に埋め込むため TextureView 描画にする。
+                    renderToTexture = true,
+                )
+            MapView(context, options).apply { onCreate(null) }
+        }
+
+    // MapView のライフサイクルをホスト Activity のライフサイクルに同期させる。
+    // observer 追加時に現在の状態（STARTED/RESUMED）まで catch-up されるため、
+    // この時点で MapView に onStart/onResume が届く（これがタイル描画に必須）。
+    DisposableEffect(lifecycle, mapView) {
+        val observer =
+            object : DefaultLifecycleObserver {
+                override fun onStart(owner: LifecycleOwner) {
+                    mapView.onStart()
+                }
+
+                override fun onResume(owner: LifecycleOwner) {
+                    mapView.onResume()
+                }
+
+                override fun onPause(owner: LifecycleOwner) {
+                    mapView.onPause()
+                }
+
+                override fun onStop(owner: LifecycleOwner) {
+                    mapView.onStop()
+                }
+            }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            mapView.onDestroy()
+        }
+    }
 
     MapViewBase(
         state = state,
         cameraState = cameraState,
         modifier = modifier,
-        viewProvider = {
-            val apiKey = tomtomApiKey(context)
-            val mapOptions =
-                MapOptions(
-                    mapKey = apiKey,
-                    cameraOptions = initialCameraPosition.toCameraOptions(),
-                    // Compose の SubcomposeLayout 内に埋め込むため TextureView 描画にする。
-                    // SurfaceView（既定）だとサブコンポーズ計測と競合し描画位置がずれる。
-                    renderToTexture = true,
-                )
-            MapView(context, mapOptions).apply {
-                onCreate(null)
-                mapLifecycle.attach(this, lifecycle)
-            }
-        },
+        // composition 側で生成済みの単一 MapView を返す（MapViewBase 側が AndroidView でホストする）。
+        viewProvider = { mapView },
         serviceRegistry = serviceRegistry,
         holderProvider = { mapView ->
+            // 生成済みの MapView から地図本体（TomTomMap）を取得する。
+            // getMapAsync は MapView がウィンドウに接続され描画準備が整った時点で発火する。
             suspendCancellableCoroutine { cont ->
                 mapView.getMapAsync { map ->
                     val holder = TomTomMapViewHolder(mapView, map)
@@ -138,114 +169,24 @@ fun TomTomMapView(
         registry = registry,
         onMapLoaded = onMapLoaded,
         customDisposableEffect = { _, _ ->
-            DisposableEffect(lifecycle, mapLifecycle) {
+            // MapView のライフサイクルは上の本体 DisposableEffect で駆動済み。
+            // ここではコンポジション破棄時にコントローラを破棄してリークを防ぐ。
+            DisposableEffect(lifecycle) {
                 val stateId = state.id
-                val observer =
-                    object : DefaultLifecycleObserver {
-                        override fun onStart(owner: LifecycleOwner) {
-                            mapLifecycle.start()
-                        }
-
-                        override fun onResume(owner: LifecycleOwner) {
-                            mapLifecycle.resume()
-                        }
-
-                        override fun onPause(owner: LifecycleOwner) {
-                            mapLifecycle.pause()
-                        }
-
-                        override fun onStop(owner: LifecycleOwner) {
-                            mapLifecycle.stop()
-                        }
-
-                        override fun onDestroy(owner: LifecycleOwner) {
-                            val activity = context.findActivity()
-                            if (activity?.isChangingConfigurations == true) {
-                                mapLifecycle.mapView?.let {
-                                    (it.parent as? ViewGroup)?.removeView(it)
-                                }
-                            } else {
-                                TomTomMapViewControllerStore.get(stateId)?.destroy()
-                                TomTomMapViewControllerStore.remove(stateId)
-                            }
-                            mapLifecycle.destroy()
-                        }
-                    }
-                lifecycle.addObserver(observer)
                 onDispose {
-                    lifecycle.removeObserver(observer)
                     TomTomMapViewControllerStore.get(stateId)?.destroy()
                     TomTomMapViewControllerStore.remove(stateId)
-                    mapLifecycle.destroy()
                 }
             }
         },
         sdkInitialize = {
+            // NOTE: Orbis 2.x のオンライン地図表示は MapOptions(mapKey=...) だけで動作し、
+            // TomTomSdk.initialize() は不要（むしろ呼ぶと map-display のネイティブ初期化と競合して
+            // 地図が生成されない）。初期化が必要なのは検索/ルーティング等のナビ機能のみ。
             sdkInitialize?.invoke(context) ?: true
         },
         content = content,
     )
-}
-
-private class TomTomMapLifecycle {
-    var mapView: MapView? = null
-        private set
-
-    private var started = false
-    private var resumed = false
-    private var destroyed = false
-
-    fun attach(
-        mapView: MapView,
-        lifecycle: Lifecycle,
-    ) {
-        this.mapView = mapView
-        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) start()
-        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) resume()
-    }
-
-    fun start() {
-        val view = mapView ?: return
-        if (!destroyed && !started) {
-            view.onStart()
-            started = true
-        }
-    }
-
-    fun resume() {
-        val view = mapView ?: return
-        if (!destroyed && !resumed) {
-            view.onResume()
-            resumed = true
-        }
-    }
-
-    fun pause() {
-        val view = mapView ?: return
-        if (!destroyed && resumed) {
-            view.onPause()
-            resumed = false
-        }
-    }
-
-    fun stop() {
-        val view = mapView ?: return
-        if (!destroyed && started) {
-            view.onStop()
-            started = false
-        }
-    }
-
-    fun destroy() {
-        val view = mapView ?: return
-        if (!destroyed) {
-            pause()
-            stop()
-            view.onDestroy()
-            destroyed = true
-            mapView = null
-        }
-    }
 }
 
 fun createTomTomMapViewController(
@@ -253,13 +194,8 @@ fun createTomTomMapViewController(
     markerTiling: MarkerTilingOptions = MarkerTilingOptions.Default,
     serviceRegistry: MutableMapServiceRegistry? = null,
 ): TomTomMapViewController {
-    // GroundImage はローカルタイルサーバ + 合成スタイルのラスタレイヤーで描画する。
-    // 動的な marker タイルと同様、タイルは no-store で配信する（合成スタイル再ロードで確実に refetch）。
-    val groundImageRenderer =
-        TomTomGroundImageOverlayRenderer(
-            holder = holder,
-            tileServer = TileServerRegistry.get(forceNoStoreCache = true),
-        )
+    // GroundImage は TomTom ネイティブの画像付き Polygon で描画する。
+    val groundImageRenderer = TomTomGroundImageOverlayRenderer(holder = holder)
     val groundImageController = TomTomGroundImageController(renderer = groundImageRenderer)
 
     val mapController =
@@ -271,9 +207,6 @@ fun createTomTomMapViewController(
             circleController = TomTomCircleController(renderer = TomTomCircleOverlayRenderer(holder)),
             groundImageController = groundImageController,
         )
-    // GroundImage のラスタ実体化先をマップコントローラ（合成スタイル管理）に接続する。
-    groundImageRenderer.rasterSink = mapController
-
     serviceRegistry?.let { registry ->
         registry.clear()
         registry.put(

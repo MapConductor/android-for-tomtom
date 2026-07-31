@@ -23,6 +23,10 @@ android {
         minSdk = project.property("minSdk").toString().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+        // TomTom Orbis SDK 2.x はプロダクトフレーバー次元 "tomtom-sdk-version" を持つ
+        // （complete=オンライン / extended=オフライン、後者は認証必須）。オンライン地図表示のみ
+        // 使うため complete を選択する。
+        missingDimensionStrategy("tomtom-sdk-version", "complete")
         aarMetadata {
             minCompileSdk = project.property("compileSdk").toString().toInt()
         }

@@ -1,16 +1,12 @@
 package com.mapconductor.tomtom.groundimage
 
-import com.mapconductor.core.groundimage.GroundImageTileProvider
+import com.tomtom.sdk.map.display.polygon.Polygon
 
 /**
  * TomTom の GroundImage 実体。
  *
- * GroundImage はローカルタイルサーバに登録した [GroundImageTileProvider] のタイルを、
- * 合成スタイルのラスタレイヤー（[rasterId]）として描画することで表示する。
+ * TomTom ネイティブの画像付き [Polygon] を保持する。
  */
 class TomTomGroundImageHandle(
-    val routeId: String,
-    val rasterId: String,
-    val tileProvider: GroundImageTileProvider,
-    val generation: Long,
+    val polygon: Polygon,
 )

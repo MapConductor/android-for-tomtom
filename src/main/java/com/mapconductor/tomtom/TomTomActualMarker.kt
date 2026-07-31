@@ -13,5 +13,5 @@ typealias TomTomActualPolygon = com.mapconductor.tomtom.polygon.TomTomPolygonHan
 // Circle は塗り（native circle）+ 枠線（polyline）の2レイヤー合成のためハンドルで保持する。
 typealias TomTomActualCircle = com.mapconductor.tomtom.circle.TomTomCircleHandle
 
-// GroundImage はローカルタイルサーバ + 合成スタイルのラスタレイヤーで描画するためハンドルで保持する。
+// GroundImage は画像付き native Polygon のハンドルで保持する。
 typealias TomTomActualGroundImage = com.mapconductor.tomtom.groundimage.TomTomGroundImageHandle

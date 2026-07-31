@@ -10,8 +10,9 @@ import android.content.pm.PackageManager
  * <meta-data android:name="TOMTOM_API_KEY" android:value="your-api-key" />
  * ```
  *
- * TomTom SDK は Mapbox のようなグローバル初期化ではなく、MapOptions(mapKey = ...) に
- * キーを渡す方式。ここではキーの取得のみ行い、実際の適用は TomTomMapView 側で行う。
+ * TomTom Orbis Maps Display SDK 2.x は Mapbox のようなグローバル初期化ではなく、
+ * MapOptions(mapKey = ...) にキーを渡す方式（オンライン地図表示に TomTomSdk.initialize は不要）。
+ * ここではキーの取得のみ行い、実際の適用は TomTomMapView 側で行う。
  */
 fun tomtomApiKey(context: Context): String {
     val apiKey =

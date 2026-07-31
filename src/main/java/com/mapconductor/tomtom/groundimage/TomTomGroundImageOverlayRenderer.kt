@@ -1,53 +1,54 @@
 package com.mapconductor.tomtom.groundimage
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Rect
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import com.mapconductor.core.groundimage.AbstractGroundImageOverlayRenderer
 import com.mapconductor.core.groundimage.GroundImageEntityInterface
 import com.mapconductor.core.groundimage.GroundImageState
-import com.mapconductor.core.groundimage.GroundImageTileProvider
-import com.mapconductor.core.tileserver.LocalTileServer
 import com.mapconductor.tomtom.TomTomActualGroundImage
 import com.mapconductor.tomtom.TomTomMapViewHolder
-import com.mapconductor.tomtom.raster.TomTomRasterLayerSink
+import com.tomtom.sdk.location.GeoPoint
+import com.tomtom.sdk.map.display.image.ImageFactory
+import com.tomtom.sdk.map.display.polygon.PolygonOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /**
- * GroundImage を「ローカルタイルサーバ + 合成スタイルのラスタレイヤー」で描画する（HERE のラスタ方式と同方針）。
+ * GroundImage を TomTom ネイティブの画像付き Polygon で描画する。
  *
- * TomTom には実行時の addLayer/addSource が無いため、画像を [GroundImageTileProvider] でタイル化して
- * ローカルサーバへ配信し、そのタイル URL を [TomTomRasterLayerSink] 経由でラスタレイヤーとして
- * 合成スタイルに載せる。不透明度はタイル生成時に焼き込むため、レイヤー側の opacity は 1.0 とする。
+ * [PolygonOptions.isImageOverlay] を有効にすると、画像が Polygon の矩形全体へ引き伸ばされる。
+ * ローカルタイルサーバやスタイル再ロードを経由しないため、GroundImage の追加・更新がベース地図や
+ * 他のラスタレイヤーの読み込み状態へ影響しない。
  */
 class TomTomGroundImageOverlayRenderer(
     override val holder: TomTomMapViewHolder,
-    private val tileServer: LocalTileServer,
-    override val coroutine: CoroutineScope = CoroutineScope(Dispatchers.Default),
+    override val coroutine: CoroutineScope = CoroutineScope(Dispatchers.Main),
 ) : AbstractGroundImageOverlayRenderer<TomTomActualGroundImage>() {
-    /** ラスタレイヤーの実体化先。[com.mapconductor.tomtom.TomTomMapViewController] が生成後に設定する。 */
-    var rasterSink: TomTomRasterLayerSink? = null
-
-    private fun safeRouteId(id: String): String = "ground-" + id.replace(Regex("[^A-Za-z0-9_-]"), "-")
-
-    private fun rasterId(id: String): String = "ground-image-$id"
-
-    private fun cacheKey(
-        state: GroundImageState,
-        generation: Long,
-    ): String = "${state.fingerPrint().hashCode()}-$generation"
-
     override suspend fun createGroundImage(state: GroundImageState): TomTomActualGroundImage? =
         withContext(coroutine.coroutineContext) {
-            val routeId = safeRouteId(state.id)
-            val provider = GroundImageTileProvider(tileSize = state.tileSize)
-            provider.update(state, opacity = state.opacity)
-            tileServer.register(routeId, provider)
-
-            val generation = 0L
-            val rid = rasterId(state.id)
-            val url = tileServer.urlTemplateWithQueryCacheKey(routeId, state.tileSize, cacheKey(state, generation))
-            rasterSink?.upsertRasterLayer(rid, url, 1.0)
-            TomTomGroundImageHandle(routeId = routeId, rasterId = rid, tileProvider = provider, generation = generation)
+            val coordinates = state.coordinates() ?: return@withContext null
+            val polygon =
+                holder.map.addPolygon(
+                    PolygonOptions(
+                        coordinates = coordinates,
+                        // TomTom は outlineWidth=0 を許容しないため、透明な輪郭を指定する。
+                        outlineColor = Color.TRANSPARENT,
+                        outlineWidth = 1.0,
+                        // 画像色に白を乗算し、alpha のみ opacity として適用する。
+                        fillColor = state.imageFillColor(),
+                        image = ImageFactory.fromBitmap(state.image.toBitmap()),
+                        isImageOverlay = true,
+                        isClickable = true,
+                        tag = state.id,
+                    ),
+                )
+            TomTomGroundImageHandle(polygon)
         }
 
     override suspend fun updateGroundImageProperties(
@@ -58,46 +59,51 @@ class TomTomGroundImageOverlayRenderer(
         withContext(coroutine.coroutineContext) {
             val finger = current.fingerPrint
             val prevFinger = prev.fingerPrint
-            val changed =
-                finger.bounds != prevFinger.bounds ||
-                    finger.image != prevFinger.image ||
-                    finger.opacity != prevFinger.opacity ||
-                    finger.tileSize != prevFinger.tileSize
-            if (!changed) return@withContext groundImage
-
-            val provider =
-                if (finger.tileSize != prevFinger.tileSize) {
-                    GroundImageTileProvider(tileSize = current.state.tileSize).also {
-                        tileServer.register(groundImage.routeId, it)
-                    }
-                } else {
-                    groundImage.tileProvider
-                }
-            provider.update(current.state, opacity = current.state.opacity)
-
-            val generation = groundImage.generation + 1L
-            // cacheKey が変わる＝URL が変わるので、合成スタイル再ロード時にタイルが確実に refetch される。
-            val url =
-                tileServer.urlTemplateWithQueryCacheKey(
-                    groundImage.routeId,
-                    current.state.tileSize,
-                    cacheKey(current.state, generation),
-                )
-            rasterSink?.upsertRasterLayer(groundImage.rasterId, url, 1.0)
-            TomTomGroundImageHandle(
-                routeId = groundImage.routeId,
-                rasterId = groundImage.rasterId,
-                tileProvider = provider,
-                generation = generation,
-            )
+            if (finger.bounds != prevFinger.bounds) {
+                val coordinates = current.state.coordinates() ?: return@withContext groundImage
+                groundImage.polygon.coordinates = coordinates
+            }
+            if (finger.image != prevFinger.image) {
+                groundImage.polygon.updateImage(ImageFactory.fromBitmap(current.state.image.toBitmap()))
+            }
+            if (finger.opacity != prevFinger.opacity) {
+                groundImage.polygon.fillColor = current.state.imageFillColor()
+            }
+            groundImage
         }
 
     override suspend fun removeGroundImage(entity: GroundImageEntityInterface<TomTomActualGroundImage>) {
         withContext(coroutine.coroutineContext) {
-            entity.groundImage.let { handle ->
-                rasterSink?.removeRasterLayer(handle.rasterId)
-                tileServer.unregister(handle.routeId)
-            }
+            entity.groundImage.polygon.remove()
         }
+    }
+
+    private fun GroundImageState.coordinates(): List<GeoPoint>? {
+        val southWest = bounds.southWest ?: return null
+        val northEast = bounds.northEast ?: return null
+        // TomTom Polygon の塗りに必要な反時計回り (CCW) の開いたリング。
+        return listOf(
+            GeoPoint(southWest.latitude, southWest.longitude),
+            GeoPoint(southWest.latitude, northEast.longitude),
+            GeoPoint(northEast.latitude, northEast.longitude),
+            GeoPoint(northEast.latitude, southWest.longitude),
+        )
+    }
+
+    private fun GroundImageState.imageFillColor(): Int =
+        Color.argb((opacity.coerceIn(0.0f, 1.0f) * 255).roundToInt(), 255, 255, 255)
+
+    private fun Drawable.toBitmap(): Bitmap {
+        if (this is BitmapDrawable && bitmap != null) return bitmap
+
+        val width = intrinsicWidth.takeIf { it > 0 } ?: 1
+        val height = intrinsicHeight.takeIf { it > 0 } ?: 1
+        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        val originalBounds = Rect(bounds)
+        setBounds(0, 0, width, height)
+        draw(canvas)
+        bounds = originalBounds
+        return result
     }
 }

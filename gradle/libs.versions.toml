@@ -6,7 +6,7 @@ composeBom = "2025.02.00"
 lifecycleRuntimeKtx = "2.8.7"
 # TomTom Orbis Maps Display SDK
 # 参照: https://developer.tomtom.com/android/maps/documentation
-tomtomMaps = "1.26.7"
+tomtomMaps = "2.4.1"
 activityCompose = "1.9.3"
 ktLint = "14.2.0"
 
@@ -26,7 +26,7 @@ androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecyc
 androidx-lifecycle-common-java8 = { group = "androidx.lifecycle", name = "lifecycle-common-java8", version.ref = "lifecycleRuntimeKtx" }
 
 # TomTom Orbis Maps Display SDK
-tomtom-map-display = { group = "com.tomtom.sdk.maps", name = "map-display", version.ref = "tomtomMaps" }
+tomtom-map-display = { group = "com.tomtom.sdk.maps", name = "map-display-standard", version.ref = "tomtomMaps" }
 
 # Sample app
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }

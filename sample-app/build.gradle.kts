@@ -20,6 +20,9 @@ android {
         targetSdk = project.property("compileSdk").toString().toInt()
         versionCode = 1
         versionName = "1.0"
+
+        // TomTom Orbis SDK 2.x のプロダクトフレーバー次元を解決する（complete=オンライン地図）。
+        missingDimensionStrategy("tomtom-sdk-version", "complete")
     }
 
     buildFeatures {

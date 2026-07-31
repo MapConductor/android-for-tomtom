@@ -20,13 +20,13 @@ sealed class TomTomMapDesign(
     override val attributionRules: List<AttributionRule> = emptyList(),
 ) : TomTomMapDesignType {
     /** 既定（ブラウジング）スタイル。 */
-    object Standard : TomTomMapDesign("standard", StandardStyles.BROWSING)
+    object Standard : TomTomMapDesign("standard", StandardStyles.TomTomOrbisMaps.BROWSING)
 
     /** ナビゲーション向けスタイル。 */
-    object Driving : TomTomMapDesign("driving", StandardStyles.DRIVING)
+    object Driving : TomTomMapDesign("driving", StandardStyles.TomTomOrbisMaps.DRIVING)
 
     /** 衛星写真スタイル。 */
-    object Satellite : TomTomMapDesign("satellite", StandardStyles.SATELLITE)
+    object Satellite : TomTomMapDesign("satellite", StandardStyles.TomTomOrbisMaps.SATELLITE)
 
     /** 任意の [StyleDescriptor]（独自スタイル URI 等）を使うカスタムデザイン。 */
     class Custom(
