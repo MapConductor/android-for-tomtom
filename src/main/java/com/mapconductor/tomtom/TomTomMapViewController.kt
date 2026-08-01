@@ -47,8 +47,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import com.tomtom.sdk.map.display.camera.CameraChangeListener
 import com.tomtom.sdk.map.display.camera.CameraSteadyListener
-import com.tomtom.sdk.map.display.circle.Circle
-import com.tomtom.sdk.map.display.circle.CircleClickListener
 import com.tomtom.sdk.map.display.gesture.MapClickListener
 import com.tomtom.sdk.map.display.gesture.MapLongClickListener
 import com.tomtom.sdk.map.display.marker.Marker
@@ -160,7 +158,6 @@ class TomTomMapViewController internal constructor(
         // オーバーレイのネイティブクリック。
         holder.map.addPolylineClickListener(PolylineClickListener { polyline -> onPolylineClickedInternal(polyline) })
         holder.map.addPolygonClickListener(PolygonClickListener { polygon -> onPolygonClickedInternal(polygon) })
-        holder.map.addCircleClickListener(CircleClickListener { circle -> onCircleClickedInternal(circle) })
         // マーカードラッグは MotionEvent を直接見て実装する。
         holder.mapView.setOnTouchListener { _, event -> onMapTouchInternal(event) }
     }
@@ -376,6 +373,17 @@ class TomTomMapViewController internal constructor(
             groundImageController.dispatchClick(GroundImageEvent(groundImageEntity.state, lastTapPosition()))
             return
         }
+        // 円の塗りもコア共通リングによる native Polygon（tag = state.id）なので、
+        // native id で円エンティティを先に識別する。
+        val circleEntity =
+            circleController.circleManager
+                .allEntities()
+                .firstOrNull { entity -> entity.circle?.fill?.any { it.id == polygon.id } == true }
+        if (circleEntity != null) {
+            val clicked = lastTapPosition() ?: circleEntity.state.center
+            circleController.dispatchClick(CircleEvent(circleEntity.state, clicked))
+            return
+        }
         // ポリゴンは穴なし=native Polygon、穴あり=PolygonOverlay+輪郭Polygon で構成が異なる。
         // クリックされた native Polygon の tag（= state.id）でエンティティを引く。
         val entity =
@@ -385,17 +393,6 @@ class TomTomMapViewController internal constructor(
         // クリック位置はタップした緯度経度（無ければ先頭頂点）。
         val clicked = lastTapPosition() ?: entity.state.points.firstOrNull() ?: return
         polygonController.dispatchClick(PolygonEvent(entity.state, clicked))
-    }
-
-    private fun onCircleClickedInternal(circle: Circle) {
-        // circle は塗り（native circle）+ 枠線（polyline）の合成。クリックは塗り側で判定する。
-        val entity =
-            circleController.circleManager
-                .allEntities()
-                .firstOrNull { it.circle?.fill?.id == circle.id } ?: return
-        // クリック位置はタップした緯度経度（無ければ中心）。
-        val clicked = lastTapPosition() ?: entity.state.center
-        circleController.dispatchClick(CircleEvent(entity.state, clicked))
     }
 
     // ---- カメライベント ---------------------------------------------------
