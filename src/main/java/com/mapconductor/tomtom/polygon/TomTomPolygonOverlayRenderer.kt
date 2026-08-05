@@ -9,7 +9,7 @@ import com.mapconductor.core.polygon.PolygonState
 import com.mapconductor.core.polygon.bridgeHolesIntoSingleRing
 import com.mapconductor.core.polygon.unionHoles
 import com.mapconductor.core.projection.Earth
-import com.mapconductor.core.spherical.createInterpolatePoints
+import com.mapconductor.core.spherical.WGS84Geodesic
 import com.mapconductor.tomtom.TomTomActualPolygon
 import com.mapconductor.tomtom.TomTomMapViewHolder
 import com.mapconductor.tomtom.toTomTomGeoPoint
@@ -45,7 +45,7 @@ class TomTomPolygonOverlayRenderer(
         // 非 geodesic は補間せず生の頂点を使う（HERE と同じ）。geodesic のみ補間する。
         val geoPoints =
             if (geodesic) {
-                createInterpolatePoints(points, maxSegmentLength = maxSegmentLengthMeters())
+                WGS84Geodesic.createInterpolatePoints(points, maxSegmentLength = maxSegmentLengthMeters())
             } else {
                 points
             }
@@ -80,7 +80,7 @@ class TomTomPolygonOverlayRenderer(
     ): List<GeoPointInterface> {
         val geoPoints =
             if (geodesic) {
-                createInterpolatePoints(points, maxSegmentLength = maxSegmentLengthMeters())
+                WGS84Geodesic.createInterpolatePoints(points, maxSegmentLength = maxSegmentLengthMeters())
             } else {
                 points
             }

@@ -7,8 +7,8 @@ import com.mapconductor.core.polyline.AbstractPolylineOverlayRenderer
 import com.mapconductor.core.polyline.PolylineEntityInterface
 import com.mapconductor.core.polyline.PolylineState
 import com.mapconductor.core.projection.Earth
-import com.mapconductor.core.spherical.createInterpolatePoints
-import com.mapconductor.core.spherical.createLinearInterpolatePoints
+import com.mapconductor.core.spherical.WGS84Geodesic
+import com.mapconductor.core.spherical.Planar
 import com.mapconductor.tomtom.TomTomActualPolyline
 import com.mapconductor.tomtom.TomTomMapViewHolder
 import com.mapconductor.tomtom.toTomTomGeoPoint
@@ -31,9 +31,9 @@ class TomTomPolylineOverlayRenderer(
     ): List<TomTomGeoPoint> {
         val geoPoints =
             if (geodesic) {
-                createInterpolatePoints(points, maxSegmentLength = maxSegmentLengthMeters())
+                WGS84Geodesic.createInterpolatePoints(points, maxSegmentLength = maxSegmentLengthMeters())
             } else {
-                createLinearInterpolatePoints(points)
+                Planar.createInterpolatePoints(points)
             }
         return geoPoints.map { GeoPoint.from(it).toTomTomGeoPoint() }
     }

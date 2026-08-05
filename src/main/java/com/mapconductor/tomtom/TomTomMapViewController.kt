@@ -1,5 +1,7 @@
 package com.mapconductor.tomtom
 
+import android.annotation.SuppressLint
+import android.view.MotionEvent
 import androidx.compose.ui.geometry.Offset
 import com.mapconductor.core.circle.CircleEvent
 import com.mapconductor.core.circle.CircleState
@@ -11,6 +13,7 @@ import com.mapconductor.core.groundimage.GroundImageEvent
 import com.mapconductor.core.groundimage.GroundImageState
 import com.mapconductor.core.groundimage.OnGroundImageEventHandler
 import com.mapconductor.core.map.MapCameraPosition
+import com.mapconductor.core.map.MapUISettings
 import com.mapconductor.core.map.VisibleRegion
 import com.mapconductor.core.marker.MarkerAnimationOverlayHost
 import com.mapconductor.core.marker.MarkerEntityInterface
@@ -40,11 +43,6 @@ import com.mapconductor.tomtom.polygon.TomTomPolygonController
 import com.mapconductor.tomtom.polyline.TomTomPolylineController
 import com.mapconductor.tomtom.raster.TomTomRasterLayerSink
 import com.mapconductor.tomtom.raster.TomTomStyleComposer
-import com.tomtom.sdk.map.display.style.StyleDescriptor
-import java.io.File
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import com.tomtom.sdk.map.display.camera.CameraChangeListener
 import com.tomtom.sdk.map.display.camera.CameraSteadyListener
 import com.tomtom.sdk.map.display.gesture.MapClickListener
@@ -56,19 +54,22 @@ import com.tomtom.sdk.map.display.polygon.PolygonClickListener
 import com.tomtom.sdk.map.display.polyline.Polyline
 import com.tomtom.sdk.map.display.polyline.PolylineClickListener
 import com.tomtom.sdk.map.display.style.LoadingStyleFailure
+import com.tomtom.sdk.map.display.style.StyleDescriptor
 import com.tomtom.sdk.map.display.style.StyleLoadingCallback
+import java.io.File
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
-import android.annotation.SuppressLint
-import android.view.MotionEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * TomTom Orbis 用のマップコントローラ（コア + マーカー + Polyline/Polygon/Circle）。
@@ -264,21 +265,27 @@ class TomTomMapViewController internal constructor(
         padding: Int,
     ) {
         if (destroyed) return
-        // NOTE: TomTom Maps Display SDK には矩形フィットの直接 API が無いため、
-        // 境界の中心へ移動するのみ（ズームは現状維持）の簡易実装。必要に応じて
-        // ズーム計算を追加すること。
         val sw = bounds.southWest ?: return
         val ne = bounds.northEast ?: return
-        val centerLat = (sw.latitude + ne.latitude) / 2.0
-        val centerLng = (sw.longitude + ne.longitude) / 2.0
-        val current = getMapCameraPosition()
-        moveCamera(
-            current.copy(
-                position =
-                    com.mapconductor.core.features.GeoPoint
-                        .fromLatLong(centerLat, centerLng),
-            ),
-        )
+        // TomTom は CameraOptionsFactory.lookAt(bounds, zoom, padding) で矩形フィットする。
+        // ズームは自動計算に委ねる（zoom=null）。padding(px) はそのまま第3引数へ渡す。
+        val geoBounds =
+            com.tomtom.sdk.location.GeoBounds(
+                listOf(
+                    com.tomtom.sdk.location.GeoPoint(sw.latitude, sw.longitude),
+                    com.tomtom.sdk.location.GeoPoint(ne.latitude, ne.longitude),
+                ),
+            )
+        val cameraOptions =
+            com.tomtom.sdk.map.display.camera.CameraOptionsFactory.lookAt(
+                geoBounds,
+                null,
+                padding,
+            )
+        mainCoroutine.launch {
+            if (destroyed) return@launch
+            holder.map.moveCamera(cameraOptions)
+        }
     }
 
     override fun getControllers(): Map<String, OverlayControllerInterface<*, *>> =
@@ -456,7 +463,14 @@ class TomTomMapViewController internal constructor(
         val touchPosition = coordinate.toGeoPoint()
         val zoomSnapshot = holder.map.cameraPosition.zoom
         defaultCoroutine.launch {
-            markerController.find(touchPosition, zoomSnapshot)?.let { entity ->
+            // マーカーのヒットテストはアイコン矩形で判定するため座標を画面へ投影する。
+            // TomTom の `pointForCoordinate` はメインスレッド必須（背景スレッドから呼ぶと
+            // IllegalStateException）なので、ここだけメインへ切り替える。
+            val markerEntity =
+                withContext(mainCoroutine.coroutineContext) {
+                    markerController.find(touchPosition, zoomSnapshot)
+                }
+            markerEntity?.let { entity ->
                 if (!entity.state.clickable) return@launch
                 mainCoroutine.launch { markerController.dispatchClick(entity.state) }
                 return@launch
@@ -521,6 +535,16 @@ class TomTomMapViewController internal constructor(
 
     private var mapDesignType: TomTomMapDesignType = TomTomMapDesign.Standard
     private var mapDesignTypeChangeListener: TomTomMapDesignTypeChangeHandler? = null
+
+    override fun applyUISettings(settings: MapUISettings) {
+        // TomTomMap implements GesturesController directly in this SDK version.
+        holder.map.apply {
+            isScrollEnabled = settings.scrollGesture
+            isZoomEnabled = settings.zoomGesture
+            isRotationEnabled = settings.rotateGesture
+            isTiltEnabled = settings.tiltGesture
+        }
+    }
 
     override fun setMapDesignType(value: TomTomMapDesignType) {
         val descriptor =

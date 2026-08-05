@@ -10,6 +10,7 @@ import com.mapconductor.core.marker.BitmapIcon
 import com.mapconductor.core.marker.DefaultMarkerIcon
 import com.mapconductor.core.marker.MarkerEntity
 import com.mapconductor.core.marker.MarkerEntityInterface
+import com.mapconductor.core.marker.MarkerHitTest
 import com.mapconductor.core.marker.MarkerIngestionEngine
 import com.mapconductor.core.marker.MarkerManager
 import com.mapconductor.core.marker.MarkerOverlayRendererInterface
@@ -19,9 +20,7 @@ import com.mapconductor.core.marker.MarkerTilingOptions
 import com.mapconductor.core.raster.RasterLayerSource
 import com.mapconductor.core.raster.RasterLayerState
 import com.mapconductor.core.raster.TileScheme
-import com.mapconductor.core.spherical.Spherical.computeDistanceBetween
 import com.mapconductor.core.tileserver.TileServerRegistry
-import com.mapconductor.settings.Settings
 import com.mapconductor.tomtom.TomTomActualMarker
 import com.mapconductor.tomtom.TomTomMapViewHolder
 import java.util.UUID
@@ -86,19 +85,33 @@ internal class TomTomMarkerController private constructor(
     override fun find(position: GeoPointInterface): MarkerEntityInterface<TomTomActualMarker>? =
         find(position = position, zoom = lastKnownZoom)
 
+    /**
+     * ネイティブの marker click に乗らないマーカー（タイル描画されたもの）を、地図クリックから
+     * 拾うためのヒットテスト。
+     *
+     * 判定は他プロバイダと同じ [MarkerHitTest]（アイコン矩形 + tapTolerance）。以前は
+     * 「tapTolerance を metersPerPixel で距離へ換算した固定半径」で測地距離と比較していたため、
+     * アイコンの大きさを一切見ておらず、大きいアイコンは端をタップしても反応せず、小さいアイコンは
+     * 離れていても反応していた。
+     *
+     * @param zoom 呼び出し側が握っているカメラのズーム。判定自体は画面座標で行うため使わないが、
+     *   既存の呼び出し側シグネチャを保つために残している。
+     */
+    @Suppress("UNUSED_PARAMETER")
     fun find(
         position: GeoPointInterface,
         zoom: Double,
-    ): MarkerEntityInterface<TomTomActualMarker>? =
-        markerManager.findNearest(position)?.let { nearest ->
-            val tolerance =
-                Settings.Default.tapTolerance.value
-                    .toDouble() * ResourceProvider.getDensity()
-            val meterInMapPixel = (renderer as TomTomMarkerRenderer).zoomToMetersPerPixel(zoom, 256)
-            val radius = tolerance * meterInMapPixel
-            val distance = computeDistanceBetween(position, nearest.state.position)
-            if (distance <= radius) nearest else null
+    ): MarkerEntityInterface<TomTomActualMarker>? {
+        val nearest = markerManager.findNearest(position) ?: return null
+        val touchScreen = renderer.holder.toScreenOffset(position) ?: return null
+        val markerScreen = renderer.holder.toScreenOffset(nearest.state.position) ?: return null
+
+        return if (MarkerHitTest.hitsIcon(touchScreen, markerScreen, nearest.state)) {
+            nearest
+        } else {
+            null
         }
+    }
 
     override suspend fun add(data: List<MarkerState>) {
         semaphore.withPermit {
