@@ -28,6 +28,7 @@ import com.mapconductor.core.polygon.PolygonState
 import com.mapconductor.core.polyline.OnPolylineEventHandler
 import com.mapconductor.core.polyline.PolylineEvent
 import com.mapconductor.core.polyline.PolylineState
+import com.mapconductor.core.raster.RasterHeaderRuleSet
 import com.mapconductor.core.raster.RasterLayerCapableInterface
 import com.mapconductor.core.raster.RasterLayerSource
 import com.mapconductor.core.raster.RasterLayerState
@@ -614,6 +615,8 @@ class TomTomMapViewController internal constructor(
         (publicRasterLayerIds - present).forEach { removeRasterLayer(it) }
         publicRasterLayerIds.clear()
         data.forEach { state ->
+            // TomTom Android はタイル要求を書き換える公開 API を持たない。
+            RasterHeaderRuleSet.warnUnsupported(provider = "TomTom", state = state)
             publicRasterLayerIds.add(state.id)
             applyPublicRasterLayer(state)
         }

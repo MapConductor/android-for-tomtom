@@ -61,7 +61,6 @@ fun TomTomMapView(
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val registry = remember { scope.buildRegistry() }
-    val serviceRegistry = remember { MutableMapServiceRegistry() }
     val cameraState = remember { mutableStateOf<MapCameraPositionInterface?>(state.cameraPosition) }
     val initialCameraPosition = remember(state) { MapCameraPosition.from(state.cameraPosition) }
     // TomTom の MapView は composition 側（remember）で生成して単一インスタンスに固定する。
@@ -114,7 +113,6 @@ fun TomTomMapView(
         modifier = modifier,
         // composition 側で生成済みの単一 MapView を返す（MapViewBase 側が AndroidView でホストする）。
         viewProvider = { mapView },
-        serviceRegistry = serviceRegistry,
         holderProvider = { mapView ->
             // 生成済みの MapView から地図本体（TomTomMap）を取得する。
             // getMapAsync は MapView がウィンドウに接続され描画準備が整った時点で発火する。
@@ -129,7 +127,7 @@ fun TomTomMapView(
             createTomTomMapViewController(
                 holder = holder,
                 markerTiling = markerTiling ?: MarkerTilingOptions.Default,
-                serviceRegistry = serviceRegistry,
+                serviceRegistry = state.serviceRegistry,
             ).also { mapController ->
                 TomTomMapViewControllerStore.set(state.id, mapController)
                 state.setController(mapController)
@@ -189,6 +187,14 @@ fun TomTomMapView(
     )
 }
 
+/**
+ * Creates the imperative controller graph used by both the Compose MapView and non-Compose hosts
+ * such as React Native.
+ *
+ * @param serviceRegistry 登録先のサービスレジストリ。Compose からは `state.serviceRegistry` を渡す
+ *   （react-sdk / ios-sdk と同じく持ち主は state）。React Native / Cordova のような非 Compose
+ *   ホストは state を持たないので、自前のレジストリを渡す。
+ */
 fun createTomTomMapViewController(
     holder: TomTomMapViewHolder,
     markerTiling: MarkerTilingOptions = MarkerTilingOptions.Default,
@@ -208,7 +214,6 @@ fun createTomTomMapViewController(
             groundImageController = groundImageController,
         )
     serviceRegistry?.let { registry ->
-        registry.clear()
         registry.put(
             MarkerRenderingSupportKey,
             object : MarkerRenderingSupport<TomTomActualMarker> {
