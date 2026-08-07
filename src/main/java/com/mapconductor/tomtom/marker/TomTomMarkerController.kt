@@ -17,6 +17,7 @@ import com.mapconductor.core.marker.MarkerOverlayRendererInterface
 import com.mapconductor.core.marker.MarkerState
 import com.mapconductor.core.marker.MarkerTileRenderer
 import com.mapconductor.core.marker.MarkerTilingOptions
+import com.mapconductor.core.marker.MarkerViewportSwitch
 import com.mapconductor.core.raster.RasterLayerSource
 import com.mapconductor.core.raster.RasterLayerState
 import com.mapconductor.core.raster.TileScheme
@@ -78,6 +79,22 @@ internal class TomTomMarkerController private constructor(
     private var rasterLayerCallback: MarkerTileRasterLayerCallback? = null
     private var cacheVersion: Int = 0
 
+    /**
+     * ビューポート内が少ないときだけタイルをやめてネイティブマーカーで描く切り替え器。
+     *
+     * レンダラ／マネージャ／semaphore を共有するので、コントローラと同じ排他の下で動く。
+     */
+    private val viewportSwitch =
+        MarkerViewportSwitch(
+            markerManager = markerManager,
+            renderer = renderer,
+            defaultMarkerIcon = defaultMarkerIcon,
+            semaphore = semaphore,
+            policy = markerTiling.viewport,
+            setTileLayerVisible = ::setTileLayerVisible,
+            invalidateTiles = ::updateRasterLayerSource,
+        )
+
     internal fun setRasterLayerCallback(callback: MarkerTileRasterLayerCallback?) {
         rasterLayerCallback = callback
     }
@@ -114,6 +131,9 @@ internal class TomTomMarkerController private constructor(
     }
 
     override suspend fun add(data: List<MarkerState>) {
+        // ingest はタイル担当 entity を marker = null で登録し直すので、先に昇格を戻す。
+        // semaphore は再入不可なので withPermit の外で呼ぶこと。
+        viewportSwitch.retract()
         semaphore.withPermit {
             val tilingEnabled =
                 markerTiling.enabled && data.size >= markerManager.minMarkerCount
@@ -141,10 +161,15 @@ internal class TomTomMarkerController private constructor(
                 removeTileOverlay()
             }
         }
+        viewportSwitch.requestReapply()
     }
 
     override suspend fun update(state: MarkerState) {
         if (!markerManager.hasEntity(state.id)) return
+
+        // 昇格中の 1 件なら先に取り下げる（下で marker = null 登録があるため）。
+        // 昇格していないマーカー（ドラッグ中など）では何もしないので、ドラッグは素通りする。
+        if (viewportSwitch.isPromoted(state.id)) viewportSwitch.release(state.id)
 
         val prevEntity = markerManager.getEntity(state.id) ?: return
         val currentFinger = state.fingerPrint()
@@ -169,6 +194,9 @@ internal class TomTomMarkerController private constructor(
                         state = state,
                         visible = prevEntity.visible,
                         isRendered = true,
+                        // tiling を立てないと MarkerTileRenderer の絞り込みから漏れ、
+                        // タイル昇格したのにタイルへ描かれないマーカーになる。
+                        tiling = true,
                     ),
                 )
                 syncTiledOverlay()
@@ -218,9 +246,11 @@ internal class TomTomMarkerController private constructor(
                 removeTileOverlay()
             }
         }
+        viewportSwitch.requestReapply()
     }
 
     override suspend fun clear() {
+        viewportSwitch.destroy()
         semaphore.withPermit {
             val entities = markerManager.allEntities()
             val toRemove = entities.filter { it.marker != null }
@@ -234,10 +264,27 @@ internal class TomTomMarkerController private constructor(
     }
 
     override suspend fun onCameraChanged(mapCameraPosition: MapCameraPosition) {
+        // 判定と昇格は debounce したうえで切り替え器の中で走る（パン中は動かない）。
+        viewportSwitch.onCameraChanged(mapCameraPosition)
         lastKnownZoom = mapCameraPosition.zoom
     }
 
+    /**
+     * マーカータイルのラスターレイヤの表示だけを切り替える。
+     *
+     * source（URL）には触らない。触るとタイルを取り直すことになり、切り替えのたびに
+     * タイルキャッシュを捨てるのと同じになる。
+     */
+    private suspend fun setTileLayerVisible(visible: Boolean) {
+        val current = markerTileRasterLayerState ?: return
+        if (current.visible == visible) return
+        val newState = current.copy(visible = visible)
+        markerTileRasterLayerState = newState
+        rasterLayerCallback?.onRasterLayerUpdate(newState)
+    }
+
     override fun destroy() {
+        viewportSwitch.destroy()
         // タイルサーバは他マップと共有のプロセス内シングルトンなので stop はしない。
         // このマップ用のルート登録だけ解除する。
         markerTileGroupId?.let { groupId -> tileServer.unregister(groupId) }
