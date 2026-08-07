@@ -67,8 +67,6 @@ class TomTomMapViewState(
     @Suppress("UNCHECKED_CAST")
     override fun getMapViewHolder(): TomTomMapViewHolder? = controller?.holder as? TomTomMapViewHolder
 
-    override fun getControllers() = controller?.getControllers()
-
     override fun moveCameraTo(
         cameraPosition: MapCameraPosition,
         durationMillis: Long?,

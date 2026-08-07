@@ -3,7 +3,6 @@ package com.mapconductor.tomtom
 import com.mapconductor.core.circle.CircleState
 import com.mapconductor.core.circle.OnCircleEventHandler
 import com.mapconductor.core.controller.BaseMapViewController
-import com.mapconductor.core.controller.OverlayControllerInterface
 import com.mapconductor.core.features.GeoPoint
 import com.mapconductor.core.features.GeoRectBounds
 import com.mapconductor.core.groundimage.GroundImageState
@@ -204,14 +203,6 @@ class TomTomMapViewController internal constructor(
     // 直近に要求した論理カメラ位置。tilt < 0 の擬似表現は SDK 側で正ピッチへ変換されるため、
     // カメラ状態の読み戻し時に元の負tilt を復元するヒントとして保持する（MapLibre と同方針）。
     internal var lastLogicalCameraPosition: MapCameraPosition? = null
-
-    override fun getControllers(): Map<String, OverlayControllerInterface<*, *>> =
-        mapOf(
-            "marker" to markerController,
-            "polyline" to polylineController,
-            "polygon" to polygonController,
-            "circle" to circleController,
-        )
 
     override suspend fun clearOverlays() {
         markerController.clear()
