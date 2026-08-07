@@ -28,8 +28,7 @@ private const val NEGATIVE_TILT_ZOOM_OFFSET_AT_MAX_TILT = -0.9
  * 状態で TomTom へ切り替えると負の rotation が渡り、`IllegalArgumentException: rotation must be in
  * range [0.0,360.0]` でクラッシュしていた。ここで [0, 360) に丸めて防止する（NaN は 0 とみなす）。
  */
-private fun Double.toTomTomRotation(): Double =
-    if (isNaN()) 0.0 else ((this % 360.0) + 360.0) % 360.0
+private fun Double.toTomTomRotation(): Double = if (isNaN()) 0.0 else ((this % 360.0) + 360.0) % 360.0
 
 /**
  * MapConductor の MapCameraPosition → TomTom の [CameraOptions]。

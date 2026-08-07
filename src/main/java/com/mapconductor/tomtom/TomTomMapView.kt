@@ -33,10 +33,7 @@ import com.mapconductor.tomtom.polygon.TomTomPolygonController
 import com.mapconductor.tomtom.polygon.TomTomPolygonOverlayRenderer
 import com.mapconductor.tomtom.polyline.TomTomPolylineController
 import com.mapconductor.tomtom.polyline.TomTomPolylineOverlayRenderer
-import com.tomtom.sdk.location.GeoPoint
 import com.tomtom.sdk.map.display.MapOptions
-import com.tomtom.sdk.map.display.camera.CameraOptions
-import com.tomtom.sdk.map.display.style.StandardStyles
 import com.tomtom.sdk.map.display.ui.MapView
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine

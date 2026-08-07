@@ -1,11 +1,5 @@
 package com.mapconductor.tomtom.groundimage
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Rect
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
 import com.mapconductor.core.groundimage.AbstractGroundImageOverlayRenderer
 import com.mapconductor.core.groundimage.GroundImageEntityInterface
 import com.mapconductor.core.groundimage.GroundImageState
@@ -14,10 +8,16 @@ import com.mapconductor.tomtom.TomTomMapViewHolder
 import com.tomtom.sdk.location.GeoPoint
 import com.tomtom.sdk.map.display.image.ImageFactory
 import com.tomtom.sdk.map.display.polygon.PolygonOptions
+import kotlin.math.roundToInt
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Rect
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 
 /**
  * GroundImage を TomTom ネイティブの画像付き Polygon で描画する。

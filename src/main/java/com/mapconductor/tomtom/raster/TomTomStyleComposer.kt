@@ -1,14 +1,14 @@
 package com.mapconductor.tomtom.raster
 
-import android.net.Uri
-import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import android.net.Uri
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 
 /**
  * TomTom の browsing ベーススタイルへ「TomTom ラスタ地図（可視ベース）」と「自前マーカーラスタ」を
@@ -98,7 +98,13 @@ object TomTomStyleComposer {
             // ラベル/オーバーレイ/マーカーがその上に来るようにする。
             val baseLayer = rasterLayer("mc-base-raster-layer", "mc-base-raster", 1.0)
             val insertAt =
-                if (styleLayers.length() > 0 && styleLayers.optJSONObject(0)?.optString("type") == "background") 1 else 0
+                if (styleLayers.length() > 0 &&
+                    styleLayers.optJSONObject(0)?.optString("type") == "background"
+                ) {
+                    1
+                } else {
+                    0
+                }
             insertLayerAt(styleLayers, insertAt, baseLayer)
 
             // 自前ラスタレイヤー（マーカータイル / GroundImage など）を最前面（末尾）へ順に重ねる。

@@ -7,8 +7,8 @@ import com.mapconductor.core.polyline.AbstractPolylineOverlayRenderer
 import com.mapconductor.core.polyline.PolylineEntityInterface
 import com.mapconductor.core.polyline.PolylineState
 import com.mapconductor.core.projection.Earth
-import com.mapconductor.core.spherical.WGS84Geodesic
 import com.mapconductor.core.spherical.Planar
+import com.mapconductor.core.spherical.WGS84Geodesic
 import com.mapconductor.tomtom.TomTomActualPolyline
 import com.mapconductor.tomtom.TomTomMapViewHolder
 import com.mapconductor.tomtom.toTomTomGeoPoint
