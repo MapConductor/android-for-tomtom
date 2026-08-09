@@ -117,6 +117,7 @@ public final class com.mapconductor.tomtom.TomTomMapViewControllerCameraKt {
 public final class com.mapconductor.tomtom.TomTomMapViewControllerGesturesKt {
   public static final boolean onMapTouchInternal(com.mapconductor.tomtom.TomTomMapViewController, android.view.MotionEvent);
   public static final com.mapconductor.core.features.GeoPoint lastTapPosition(com.mapconductor.tomtom.TomTomMapViewController);
+  public static final boolean dispatchOverlayTap(com.mapconductor.tomtom.TomTomMapViewController, com.mapconductor.core.features.GeoPointInterface);
   public static final void onPolylineClickedInternal(com.mapconductor.tomtom.TomTomMapViewController, com.tomtom.sdk.map.display.polyline.Polyline);
   public static final void onPolygonClickedInternal(com.mapconductor.tomtom.TomTomMapViewController, com.tomtom.sdk.map.display.polygon.Polygon);
   public static final void onMapClickInternal(com.mapconductor.tomtom.TomTomMapViewController, com.tomtom.sdk.location.GeoPoint);

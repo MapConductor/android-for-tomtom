@@ -2,6 +2,8 @@ package com.mapconductor.tomtom
 
 import androidx.compose.ui.geometry.Offset
 import com.mapconductor.core.circle.CircleEvent
+import com.mapconductor.core.features.GeoPoint
+import com.mapconductor.core.features.GeoPointInterface
 import com.mapconductor.core.groundimage.GroundImageEvent
 import com.mapconductor.core.marker.dispatchNativeMarkerClick
 import com.mapconductor.core.polygon.PolygonEvent
@@ -85,55 +87,75 @@ internal fun TomTomMapViewController.lastTapPosition() =
     holder
         .fromScreenOffsetSync(Offset(lastTapScreenX, lastTapScreenY))
 
-internal fun TomTomMapViewController.onPolylineClickedInternal(polyline: Polyline) {
-    // クリックイベントの緯度経度は「タップ位置とポリラインの最近傍点」にする（他プロバイダと同じ）。
-    val tap = lastTapPosition()
-    if (tap != null) {
-        polylineController.findWithClosestPoint(tap)?.let { hit ->
-            polylineController.dispatchClick(PolylineEvent(hit.entity.state, hit.closestPoint))
-            return
-        }
+/**
+ * オーバーレイのクリックを、コア共通のヒットテストで振り分ける。
+ *
+ * 探索順は他プロバイダと同じ `circle → groundImage → polyline → polygon`。
+ * 当たれば配送して true。
+ *
+ * TomTom のネイティブのオーバーレイ用リスナー（PolygonClickListener /
+ * PolylineClickListener）は、**識別手段ではなく発火のきっかけ**としてのみ使う。
+ * どのエンティティかの判定はここでコアに委ねているので、他プロバイダと同じ結果になる
+ * （例: 穴の内側は「外」と判定される）。
+ *
+ * ネイティブのリスナーを外せない理由:
+ * 実機計測（Lenovo TB520FU / TomTom SDK 2.4.1）で、`isClickable = false` にすると
+ * オーバーレイ上のタップは MapClickListener にも届かず、どのリスナーも発火しない。
+ * Google Maps の `clickable(false)`（透過して map click が来る）とは意味が違い、
+ * TomTom では握り潰しになる。よってオーバーレイ上のタップを拾うにはネイティブの
+ * リスナーが要る。なお `isClickable = true` のとき MapClickListener は発火しないので、
+ * ネイティブ経路と地図クリック経路は排他で、二重配送にはならない。
+ */
+internal fun TomTomMapViewController.dispatchOverlayTap(position: GeoPointInterface?): Boolean {
+    val touchPosition = position ?: return false
+
+    circleController.find(touchPosition)?.let { entity ->
+        circleController.dispatchClick(CircleEvent(entity.state, GeoPoint.from(touchPosition)))
+        return true
     }
-    // フォールバック: ネイティブクリックの polyline + タップ位置（無ければ先頭点）。
-    val entity =
-        polylineController.polylineManager
-            .allEntities()
-            .firstOrNull { it.polyline.id == polyline.id } ?: return
-    val clicked = tap ?: entity.state.points.firstOrNull() ?: return
-    polylineController.dispatchClick(PolylineEvent(entity.state, clicked))
+    groundImageController.find(touchPosition)?.let { entity ->
+        groundImageController.dispatchClick(GroundImageEvent(entity.state, GeoPoint.from(touchPosition)))
+        return true
+    }
+    polylineController.findWithClosestPoint(touchPosition)?.let { hit ->
+        // クリック座標は「タップ位置と線の最近傍点」にする（他プロバイダと同じ）。
+        polylineController.dispatchClick(PolylineEvent(hit.entity.state, hit.closestPoint))
+        return true
+    }
+    polygonController.find(touchPosition)?.let { entity ->
+        polygonController.dispatchClick(PolygonEvent(entity.state, GeoPoint.from(touchPosition)))
+        return true
+    }
+    return false
 }
 
-internal fun TomTomMapViewController.onPolygonClickedInternal(polygon: Polygon) {
-    // GroundImage も画像付き native Polygon なので、Polygon 本体の id で先に識別する。
-    // state.id ではなく native id を使い、通常 Polygon と同じ tag でも誤配送しない。
-    val groundImageEntity =
-        groundImageController.groundImageManager
-            .allEntities()
-            .firstOrNull { it.groundImage.polygon.id == polygon.id }
-    if (groundImageEntity != null) {
-        groundImageController.dispatchClick(GroundImageEvent(groundImageEntity.state, lastTapPosition()))
-        return
+/** ネイティブのポリラインクリック（PolylineClickListener から配線）。 */
+internal fun TomTomMapViewController.onPolylineClickedInternal(
+    @Suppress("UNUSED_PARAMETER") polyline: Polyline,
+) {
+    onNativeOverlayTapped()
+}
+
+/** ネイティブのポリゴンクリック（PolygonClickListener から配線）。円とグラウンドイメージも native Polygon）。 */
+internal fun TomTomMapViewController.onPolygonClickedInternal(
+    @Suppress("UNUSED_PARAMETER") polygon: Polygon,
+) {
+    onNativeOverlayTapped()
+}
+
+/**
+ * ネイティブのオーバーレイクリックを、地図クリックと同じ配送へ流す。
+ *
+ * コアの判定で何にも当たらなければ地図クリックとして扱う。ネイティブは当たったと
+ * 言っているがコアは当たっていないと言う状況（穴の内側など）で、イベントが
+ * 握り潰されないようにするため。
+ */
+private fun TomTomMapViewController.onNativeOverlayTapped() {
+    val touchPosition = lastTapPosition() ?: return
+    if (dispatchOverlayTap(touchPosition)) return
+    mapClickHandler()?.let { cb ->
+        mainCoroutine.launch { cb(GeoPoint.from(touchPosition)) }
     }
-    // 円の塗りもコア共通リングによる native Polygon（tag = state.id）なので、
-    // native id で円エンティティを先に識別する。
-    val circleEntity =
-        circleController.circleManager
-            .allEntities()
-            .firstOrNull { entity -> entity.circle?.fill?.any { it.id == polygon.id } == true }
-    if (circleEntity != null) {
-        val clicked = lastTapPosition() ?: circleEntity.state.center
-        circleController.dispatchClick(CircleEvent(circleEntity.state, clicked))
-        return
-    }
-    // ポリゴンは穴なし=native Polygon、穴あり=PolygonOverlay+輪郭Polygon で構成が異なる。
-    // クリックされた native Polygon の tag（= state.id）でエンティティを引く。
-    val entity =
-        polygonController.polygonManager
-            .allEntities()
-            .firstOrNull { it.polygon.tag == polygon.tag } ?: return
-    // クリック位置はタップした緯度経度（無ければ先頭頂点）。
-    val clicked = lastTapPosition() ?: entity.state.points.firstOrNull() ?: return
-    polygonController.dispatchClick(PolygonEvent(entity.state, clicked))
 }
 
 /** マップ（マーカー以外）タップ時（MapClickListener から配線）。 */
@@ -151,6 +173,11 @@ internal fun TomTomMapViewController.onMapClickInternal(coordinate: com.tomtom.s
         markerEntity?.let { entity ->
             if (!entity.state.clickable) return@launch
             mainCoroutine.launch { markerController.dispatchClick(entity.state) }
+            return@launch
+        }
+        // オーバーレイ上のタップはネイティブのリスナー経由で来るのが通常だが、
+        // 取りこぼしに備えて地図クリック側でも同じカスケードを通す。
+        if (withContext(mainCoroutine.coroutineContext) { dispatchOverlayTap(touchPosition) }) {
             return@launch
         }
         mapClickHandler()?.let { cb ->
