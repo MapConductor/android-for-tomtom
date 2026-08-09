@@ -188,7 +188,6 @@ public interface com.mapconductor.tomtom.circle.TomTomCircleControllerInterface 
 public final class com.mapconductor.tomtom.circle.TomTomCircleControllerInterface$DefaultImpls {
   public static boolean has(com.mapconductor.tomtom.circle.TomTomCircleControllerInterface, java.lang.String);
   public static void setClickListenerAny(com.mapconductor.tomtom.circle.TomTomCircleControllerInterface, java.lang.Object);
-  public static com.mapconductor.core.controller.OverlayKind getKind(com.mapconductor.tomtom.circle.TomTomCircleControllerInterface);
 }
 public final class com.mapconductor.tomtom.circle.TomTomCircleHandle {
   public com.mapconductor.tomtom.circle.TomTomCircleHandle(java.util.List<com.tomtom.sdk.map.display.polygon.Polygon>, java.util.List<com.tomtom.sdk.map.display.polyline.Polyline>);
@@ -285,7 +284,6 @@ public interface com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface 
 public final class com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface$DefaultImpls {
   public static boolean has(com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface, java.lang.String);
   public static void setClickListenerAny(com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface, java.lang.Object);
-  public static com.mapconductor.core.controller.OverlayKind getKind(com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface);
 }
 public interface com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface extends com.mapconductor.core.marker.MarkerEventControllerInterface<com.tomtom.sdk.map.display.marker.Marker>, com.mapconductor.core.marker.NativeMarkerClickTargetInterface<com.tomtom.sdk.map.display.marker.Marker> {
   public abstract void dispatchDragStart(com.mapconductor.core.marker.MarkerState);
@@ -318,7 +316,6 @@ public interface com.mapconductor.tomtom.polygon.TomTomPolygonControllerInterfac
 public final class com.mapconductor.tomtom.polygon.TomTomPolygonControllerInterface$DefaultImpls {
   public static boolean has(com.mapconductor.tomtom.polygon.TomTomPolygonControllerInterface, java.lang.String);
   public static void setClickListenerAny(com.mapconductor.tomtom.polygon.TomTomPolygonControllerInterface, java.lang.Object);
-  public static com.mapconductor.core.controller.OverlayKind getKind(com.mapconductor.tomtom.polygon.TomTomPolygonControllerInterface);
 }
 public final class com.mapconductor.tomtom.polygon.TomTomPolygonHandle {
   public com.mapconductor.tomtom.polygon.TomTomPolygonHandle(java.lang.String, com.tomtom.sdk.map.display.polygon.Polygon, com.tomtom.sdk.map.display.polygon.PolygonOverlay);
@@ -349,7 +346,6 @@ public interface com.mapconductor.tomtom.polyline.TomTomPolylineControllerInterf
 public final class com.mapconductor.tomtom.polyline.TomTomPolylineControllerInterface$DefaultImpls {
   public static boolean has(com.mapconductor.tomtom.polyline.TomTomPolylineControllerInterface, java.lang.String);
   public static void setClickListenerAny(com.mapconductor.tomtom.polyline.TomTomPolylineControllerInterface, java.lang.Object);
-  public static com.mapconductor.core.controller.OverlayKind getKind(com.mapconductor.tomtom.polyline.TomTomPolylineControllerInterface);
 }
 public final class com.mapconductor.tomtom.polyline.TomTomPolylineOverlayRenderer extends com.mapconductor.core.polyline.AbstractPolylineOverlayRenderer<com.tomtom.sdk.map.display.polyline.Polyline> {
   public com.mapconductor.tomtom.polyline.TomTomPolylineOverlayRenderer(com.mapconductor.tomtom.TomTomMapViewHolder, kotlinx.coroutines.CoroutineScope);
