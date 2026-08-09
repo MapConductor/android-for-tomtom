@@ -1,9 +1,8 @@
 package com.mapconductor.tomtom
 
-import androidx.compose.ui.geometry.Offset
 import com.mapconductor.core.features.GeoRectBounds
 import com.mapconductor.core.map.MapCameraPosition
-import com.mapconductor.core.map.VisibleRegion
+import com.mapconductor.core.map.buildVisibleRegion
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.launch
 
@@ -96,24 +95,9 @@ internal fun TomTomMapViewController.getMapCameraPosition(): MapCameraPosition {
     // 画面四隅を投影して visibleRegion（ビューポート）を構築する。
     // これが無いと marker-clustering がビューポートを算出できずクラスタが一切描画されない
     // （他プロバイダは getMapCameraPosition で visibleRegion を設定している）。
-    val w = holder.mapView.width
-    val h = holder.mapView.height
-    if (w <= 0 || h <= 0) return camera
-    val farLeft = holder.fromScreenOffsetSync(Offset(0f, 0f))
-    val farRight = holder.fromScreenOffsetSync(Offset(w.toFloat(), 0f))
-    val nearLeft = holder.fromScreenOffsetSync(Offset(0f, h.toFloat()))
-    val nearRight = holder.fromScreenOffsetSync(Offset(w.toFloat(), h.toFloat()))
-    val corners = listOfNotNull(farLeft, farRight, nearLeft, nearRight)
-    if (corners.isEmpty()) return camera
-    val bounds = GeoRectBounds().apply { corners.forEach { extend(it) } }
-    return camera.copy(
-        visibleRegion =
-            VisibleRegion(
-                bounds = bounds,
-                nearLeft = nearLeft,
-                nearRight = nearRight,
-                farLeft = farLeft,
-                farRight = farRight,
-            ),
-    )
+    //
+    // requireAllCorners = false: 傾けた地図では隅の逆投影が地表に当たらないことがあり、
+    // そこで visibleRegion ごと落とすとクラスタが消える。解けた隅だけで bounds を作る。
+    val visibleRegion = holder.buildVisibleRegion(requireAllCorners = false) ?: return camera
+    return camera.copy(visibleRegion = visibleRegion)
 }
