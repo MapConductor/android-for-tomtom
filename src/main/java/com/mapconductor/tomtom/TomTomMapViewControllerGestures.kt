@@ -3,6 +3,7 @@ package com.mapconductor.tomtom
 import androidx.compose.ui.geometry.Offset
 import com.mapconductor.core.circle.CircleEvent
 import com.mapconductor.core.groundimage.GroundImageEvent
+import com.mapconductor.core.marker.dispatchNativeMarkerClick
 import com.mapconductor.core.polygon.PolygonEvent
 import com.mapconductor.core.polyline.PolylineEvent
 import com.mapconductor.tomtom.marker.TomTomMarkerRenderer
@@ -159,13 +160,9 @@ internal fun TomTomMapViewController.onMapClickInternal(coordinate: com.tomtom.s
 }
 
 /** ネイティブのマーカークリック（MarkerClickListener から配線）。 */
-internal fun TomTomMapViewController.onMarkerClickedInternal(marker: Marker): Boolean {
-    val stateId = marker.tag ?: return false
-    markerEventControllers.forEach { controller ->
-        val entity = controller.getEntity(stateId) ?: return@forEach
-        if (!entity.state.clickable) return true
-        controller.dispatchClick(entity.state)
-        return true
-    }
-    return false
-}
+internal fun TomTomMapViewController.onMarkerClickedInternal(marker: Marker): Boolean =
+    // TomTom の MarkerOptions には isClickable が無く（polygon / polyline にはある）、
+    // マーカーのタップは SDK が消費してしまうため、ここだけネイティブのリスナーを使う。
+    // 判断はコアの dispatchNativeMarkerClick に一本化（android-for-googlemaps と同じ経路）。
+    // 管理外のマーカーを素通しする tag 判定もそちらに含まれる。
+    markerEventControllers.dispatchNativeMarkerClick(marker.tag)

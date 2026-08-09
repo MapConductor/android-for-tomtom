@@ -291,9 +291,7 @@ public final class com.mapconductor.tomtom.marker.TomTomMarkerController$Compani
 }
 public interface com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface extends com.mapconductor.core.controller.OverlayControllerInterface<com.mapconductor.core.marker.MarkerState, com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker>> {
 }
-public interface com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface extends com.mapconductor.core.marker.MarkerEventControllerInterface<com.tomtom.sdk.map.display.marker.Marker> {
-  public abstract com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker> getEntity(java.lang.String);
-  public abstract void dispatchClick(com.mapconductor.core.marker.MarkerState);
+public interface com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface extends com.mapconductor.core.marker.MarkerEventControllerInterface<com.tomtom.sdk.map.display.marker.Marker>, com.mapconductor.core.marker.NativeMarkerClickTargetInterface<com.tomtom.sdk.map.display.marker.Marker> {
   public abstract void dispatchDragStart(com.mapconductor.core.marker.MarkerState);
   public abstract void dispatchDrag(com.mapconductor.core.marker.MarkerState);
   public abstract void dispatchDragEnd(com.mapconductor.core.marker.MarkerState);

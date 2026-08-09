@@ -3,15 +3,14 @@ package com.mapconductor.tomtom.marker
 import com.mapconductor.core.marker.MarkerEntityInterface
 import com.mapconductor.core.marker.MarkerEventControllerInterface
 import com.mapconductor.core.marker.MarkerState
+import com.mapconductor.core.marker.NativeMarkerClickTargetInterface
 import com.mapconductor.core.marker.OnMarkerEventHandler
 import com.mapconductor.core.marker.StrategyMarkerController
 import com.mapconductor.tomtom.TomTomActualMarker
 
-internal interface TomTomMarkerEventControllerInterface : MarkerEventControllerInterface<TomTomActualMarker> {
-    fun getEntity(id: String): MarkerEntityInterface<TomTomActualMarker>?
-
-    fun dispatchClick(state: MarkerState)
-
+internal interface TomTomMarkerEventControllerInterface :
+    MarkerEventControllerInterface<TomTomActualMarker>,
+    NativeMarkerClickTargetInterface<TomTomActualMarker> {
     fun dispatchDragStart(state: MarkerState)
 
     fun dispatchDrag(state: MarkerState)
