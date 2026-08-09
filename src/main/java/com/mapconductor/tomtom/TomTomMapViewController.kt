@@ -13,7 +13,6 @@ import com.mapconductor.core.marker.MarkerAnimationOverlayHost
 import com.mapconductor.core.marker.MarkerEntityInterface
 import com.mapconductor.core.marker.MarkerEventControllerInterface
 import com.mapconductor.core.marker.MarkerOverlayRendererInterface
-import com.mapconductor.core.marker.MarkerState
 import com.mapconductor.core.marker.OnMarkerEventHandler
 import com.mapconductor.core.marker.StrategyMarkerController
 import com.mapconductor.core.polygon.OnPolygonEventHandler
@@ -211,21 +210,11 @@ class TomTomMapViewController internal constructor(
         circleController.clear()
     }
 
-    override suspend fun compositionMarkers(data: List<MarkerState>) = markerController.add(data)
-
     override fun setMarkerAnimationOverlayHost(host: MarkerAnimationOverlayHost?) {
         (markerController.renderer as TomTomMarkerRenderer).animationOverlayHost = host
     }
 
-    override suspend fun updateMarker(state: MarkerState) = markerController.update(state)
-
-    override fun hasMarker(state: MarkerState): Boolean = this.markerController.markerManager.hasEntity(state.id)
-
     // ---- Polyline / Polygon / Circle capable ------------------------------
-
-    override suspend fun compositionPolylines(data: List<PolylineState>) = polylineController.add(data)
-
-    override suspend fun updatePolyline(state: PolylineState) = polylineController.update(state)
 
     override fun hasPolyline(state: PolylineState): Boolean = polylineController.polylineManager.hasEntity(state.id)
 
@@ -234,20 +223,12 @@ class TomTomMapViewController internal constructor(
         polylineController.clickListener = listener
     }
 
-    override suspend fun compositionPolygons(data: List<PolygonState>) = polygonController.add(data)
-
-    override suspend fun updatePolygon(state: PolygonState) = polygonController.update(state)
-
     override fun hasPolygon(state: PolygonState): Boolean = polygonController.polygonManager.hasEntity(state.id)
 
     @Deprecated("Use PolygonState.onClick instead.")
     override fun setOnPolygonClickListener(listener: OnPolygonEventHandler?) {
         polygonController.clickListener = listener
     }
-
-    override suspend fun compositionCircles(data: List<CircleState>) = circleController.add(data)
-
-    override suspend fun updateCircle(state: CircleState) = circleController.update(state)
 
     override fun hasCircle(state: CircleState): Boolean = circleController.circleManager.hasEntity(state.id)
 
@@ -410,10 +391,6 @@ class TomTomMapViewController internal constructor(
     }
 
     // ---- GroundImage（画像付き native Polygon で描画） --------------------------------------
-
-    override suspend fun compositionGroundImages(data: List<GroundImageState>) = groundImageController.add(data)
-
-    override suspend fun updateGroundImage(state: GroundImageState) = groundImageController.update(state)
 
     override fun hasGroundImage(state: GroundImageState): Boolean =
         groundImageController.groundImageManager.hasEntity(state.id)
