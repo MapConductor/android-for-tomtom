@@ -387,13 +387,11 @@ public final class com.mapconductor.tomtom.raster.TomTomStyleComposer$RasterSpec
   public int hashCode();
   public boolean equals(java.lang.Object);
 }
-public final class com.mapconductor.tomtom.zoom.ZoomAltitudeConverter extends com.mapconductor.core.zoom.AbstractZoomAltitudeConverter {
+public final class com.mapconductor.tomtom.zoom.ZoomAltitudeConverter extends com.mapconductor.core.zoom.GroundScaleZoomAltitudeConverter {
   public static final com.mapconductor.tomtom.zoom.ZoomAltitudeConverter$Companion Companion;
   public static final double TOMTOM_TO_GOOGLE_ZOOM_BASE_OFFSET;
   public com.mapconductor.tomtom.zoom.ZoomAltitudeConverter(double);
   public com.mapconductor.tomtom.zoom.ZoomAltitudeConverter(double, int, kotlin.jvm.internal.DefaultConstructorMarker);
-  public double zoomLevelToAltitude(double, double, double);
-  public double altitudeToZoomLevel(double, double, double);
   public com.mapconductor.tomtom.zoom.ZoomAltitudeConverter();
 }
 public final class com.mapconductor.tomtom.zoom.ZoomAltitudeConverter$Companion {
