@@ -4,6 +4,7 @@ import com.mapconductor.core.circle.CircleState
 import com.mapconductor.core.circle.OnCircleEventHandler
 import com.mapconductor.core.controller.BaseMapViewController
 import com.mapconductor.core.features.GeoPoint
+import com.mapconductor.core.features.GeoPointInterface
 import com.mapconductor.core.features.GeoRectBounds
 import com.mapconductor.core.groundimage.GroundImageState
 import com.mapconductor.core.groundimage.OnGroundImageEventHandler
@@ -15,6 +16,7 @@ import com.mapconductor.core.marker.MarkerEventControllerInterface
 import com.mapconductor.core.marker.MarkerOverlayRendererInterface
 import com.mapconductor.core.marker.OnMarkerEventHandler
 import com.mapconductor.core.marker.StrategyMarkerController
+import com.mapconductor.core.marker.dispatchGeoMarkerClick
 import com.mapconductor.core.polygon.OnPolygonEventHandler
 import com.mapconductor.core.polygon.PolygonState
 import com.mapconductor.core.polyline.OnPolylineEventHandler
@@ -135,13 +137,6 @@ class TomTomMapViewController internal constructor(
 
     // 拡張ファイル（Gestures / Camera / Raster）からは基底クラスの protected へ
     // 触れないため、ここで internal の入口を用意しておく。
-    internal fun emitMapClick(point: GeoPoint) {
-        mapClickCallback?.invoke(point)
-    }
-
-    internal fun emitMapLongClick(point: GeoPoint) {
-        mapLongClickCallback?.invoke(point)
-    }
 
     internal fun emitCameraMoveStart(position: MapCameraPosition) {
         cameraMoveStartCallback?.invoke(position)
@@ -161,6 +156,16 @@ class TomTomMapViewController internal constructor(
 
     internal fun correctForCameraRestriction(current: MapCameraPosition): MapCameraPosition? =
         cameraRestrictionCorrection(current)
+
+    /**
+     * タイル描画されたマーカーのヒットテスト。
+     *
+     * ネイティブの `Marker` として描かれたものは MarkerClickListener が先に消費するので
+     * ここへは来ない（[com.mapconductor.core.marker.dispatchNativeMarkerClick]）。
+     * 呼び出し元がメインスレッドなので `pointForCoordinate` を触ってよい。
+     */
+    override fun dispatchMarkerTap(position: GeoPointInterface): Boolean =
+        markerEventControllers.dispatchGeoMarkerClick(position)
 
     internal fun mapClickHandler(): ((GeoPoint) -> Unit)? = mapClickCallback
 

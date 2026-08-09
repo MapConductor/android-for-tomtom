@@ -1,5 +1,7 @@
 package com.mapconductor.tomtom.marker
 
+import com.mapconductor.core.features.GeoPointInterface
+import com.mapconductor.core.marker.GeoMarkerClickTargetInterface
 import com.mapconductor.core.marker.MarkerEntityInterface
 import com.mapconductor.core.marker.MarkerEventControllerInterface
 import com.mapconductor.core.marker.MarkerState
@@ -10,7 +12,10 @@ import com.mapconductor.tomtom.TomTomActualMarker
 
 internal interface TomTomMarkerEventControllerInterface :
     MarkerEventControllerInterface<TomTomActualMarker>,
-    NativeMarkerClickTargetInterface<TomTomActualMarker> {
+    // ネイティブの Marker として描かれたものは MarkerClickListener 経由（tag から逆引き）。
+    NativeMarkerClickTargetInterface<TomTomActualMarker>,
+    // タイル描画されたマーカーは地図クリックの座標から引く。
+    GeoMarkerClickTargetInterface<TomTomActualMarker> {
     fun dispatchDragStart(state: MarkerState)
 
     fun dispatchDrag(state: MarkerState)
@@ -35,6 +40,9 @@ internal class DefaultTomTomMarkerEventController(
 ) : TomTomMarkerEventControllerInterface {
     override fun getEntity(id: String): MarkerEntityInterface<TomTomActualMarker>? =
         controller.markerManager.getEntity(id)
+
+    override fun find(position: GeoPointInterface): MarkerEntityInterface<TomTomActualMarker>? =
+        controller.find(position)
 
     override fun dispatchClick(state: MarkerState) = controller.dispatchClick(state)
 
@@ -73,6 +81,9 @@ internal class StrategyTomTomMarkerEventController(
     private val controller: StrategyMarkerController<TomTomActualMarker>,
 ) : TomTomMarkerEventControllerInterface {
     override fun getEntity(id: String): MarkerEntityInterface<TomTomActualMarker>? = controller.getEntity(id)
+
+    override fun find(position: GeoPointInterface): MarkerEntityInterface<TomTomActualMarker>? =
+        controller.find(position)
 
     override fun dispatchClick(state: MarkerState) = controller.dispatchClick(state)
 

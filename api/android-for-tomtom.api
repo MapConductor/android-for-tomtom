@@ -62,6 +62,7 @@ public final class com.mapconductor.tomtom.TomTomMapViewController extends com.m
   public void moveCamera(com.mapconductor.core.map.MapCameraPosition);
   public void animateCamera(com.mapconductor.core.map.MapCameraPosition, long);
   public void fitBounds(com.mapconductor.core.features.GeoRectBounds, int);
+  protected boolean dispatchMarkerTap(com.mapconductor.core.features.GeoPointInterface);
   public void destroy();
   public java.lang.Object clearOverlays(kotlin.coroutines.Continuation<? super kotlin.Unit>);
   public void setMarkerAnimationOverlayHost(com.mapconductor.core.marker.MarkerAnimationOverlayHost);
@@ -106,7 +107,6 @@ public final class com.mapconductor.tomtom.TomTomMapViewControllerCameraKt {
 public final class com.mapconductor.tomtom.TomTomMapViewControllerGesturesKt {
   public static final boolean onMapTouchInternal(com.mapconductor.tomtom.TomTomMapViewController, android.view.MotionEvent);
   public static final com.mapconductor.core.features.GeoPoint lastTapPosition(com.mapconductor.tomtom.TomTomMapViewController);
-  public static final boolean dispatchOverlayTap(com.mapconductor.tomtom.TomTomMapViewController, com.mapconductor.core.features.GeoPointInterface);
   public static final void onPolylineClickedInternal(com.mapconductor.tomtom.TomTomMapViewController, com.tomtom.sdk.map.display.polyline.Polyline);
   public static final void onPolygonClickedInternal(com.mapconductor.tomtom.TomTomMapViewController, com.tomtom.sdk.map.display.polygon.Polygon);
   public static final void onMapClickInternal(com.mapconductor.tomtom.TomTomMapViewController, com.tomtom.sdk.location.GeoPoint);
@@ -229,6 +229,7 @@ public final class com.mapconductor.tomtom.groundimage.TomTomGroundImageOverlayR
 public final class com.mapconductor.tomtom.marker.DefaultTomTomMarkerEventController implements com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface {
   public com.mapconductor.tomtom.marker.DefaultTomTomMarkerEventController(com.mapconductor.tomtom.marker.TomTomMarkerController);
   public com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker> getEntity(java.lang.String);
+  public com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker> find(com.mapconductor.core.features.GeoPointInterface);
   public void dispatchClick(com.mapconductor.core.marker.MarkerState);
   public void dispatchDragStart(com.mapconductor.core.marker.MarkerState);
   public void dispatchDrag(com.mapconductor.core.marker.MarkerState);
@@ -252,6 +253,7 @@ public interface com.mapconductor.tomtom.marker.MarkerTileRasterLayerCallback {
 public final class com.mapconductor.tomtom.marker.StrategyTomTomMarkerEventController implements com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface {
   public com.mapconductor.tomtom.marker.StrategyTomTomMarkerEventController(com.mapconductor.core.marker.StrategyMarkerController<com.tomtom.sdk.map.display.marker.Marker>);
   public com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker> getEntity(java.lang.String);
+  public com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker> find(com.mapconductor.core.features.GeoPointInterface);
   public void dispatchClick(com.mapconductor.core.marker.MarkerState);
   public void dispatchDragStart(com.mapconductor.core.marker.MarkerState);
   public void dispatchDrag(com.mapconductor.core.marker.MarkerState);
@@ -285,7 +287,7 @@ public final class com.mapconductor.tomtom.marker.TomTomMarkerControllerInterfac
   public static boolean has(com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface, java.lang.String);
   public static void setClickListenerAny(com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface, java.lang.Object);
 }
-public interface com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface extends com.mapconductor.core.marker.MarkerEventControllerInterface<com.tomtom.sdk.map.display.marker.Marker>, com.mapconductor.core.marker.NativeMarkerClickTargetInterface<com.tomtom.sdk.map.display.marker.Marker> {
+public interface com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface extends com.mapconductor.core.marker.MarkerEventControllerInterface<com.tomtom.sdk.map.display.marker.Marker>, com.mapconductor.core.marker.NativeMarkerClickTargetInterface<com.tomtom.sdk.map.display.marker.Marker>, com.mapconductor.core.marker.GeoMarkerClickTargetInterface<com.tomtom.sdk.map.display.marker.Marker> {
   public abstract void dispatchDragStart(com.mapconductor.core.marker.MarkerState);
   public abstract void dispatchDrag(com.mapconductor.core.marker.MarkerState);
   public abstract void dispatchDragEnd(com.mapconductor.core.marker.MarkerState);
