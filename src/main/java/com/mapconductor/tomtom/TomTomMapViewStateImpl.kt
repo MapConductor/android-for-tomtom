@@ -5,8 +5,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.mapconductor.compose.map.BaseMapViewSaver
-import com.mapconductor.core.features.GeoPoint
-import com.mapconductor.core.features.GeoRectBounds
 import com.mapconductor.core.map.MapCameraPosition
 import com.mapconductor.core.map.MapCameraPositionInterface
 import com.mapconductor.core.map.MapPaddings
@@ -24,12 +22,8 @@ class TomTomMapViewState(
     override val id: String,
     mapDesignType: TomTomMapDesignType,
     cameraPosition: MapCameraPosition = MapCameraPosition.Default,
-) : MapViewState<TomTomMapDesignType>(),
+) : MapViewState<TomTomMapDesignType>(cameraPosition),
     TomTomMapViewStateInterface {
-    private var _cameraPosition: MapCameraPosition = cameraPosition
-    override val cameraPosition: MapCameraPosition
-        get() = _cameraPosition
-
     // Map padding
     private val _padding = MutableStateFlow(MapPaddings.Zeros)
     val padding: StateFlow<MapPaddings> = _padding.asStateFlow()
@@ -46,52 +40,18 @@ class TomTomMapViewState(
 
     internal fun setController(controller: TomTomMapViewControllerInterface) {
         this.controller = controller
-        controller.moveCamera(cameraPosition)
+        attachController(controller)
     }
 
     internal fun onMapDesignTypeChange(value: TomTomMapDesignType) {
         _mapDesignType = value
     }
 
-    override fun moveCameraTo(
-        position: GeoPoint,
-        durationMillis: Long?,
-    ) {
-        val newPosition =
-            this.cameraPosition.copy(
-                position = position,
-            )
-        this.moveCameraTo(newPosition, durationMillis)
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    override fun getMapViewHolder(): TomTomMapViewHolder? = controller?.holder as? TomTomMapViewHolder
-
-    override fun moveCameraTo(
-        cameraPosition: MapCameraPosition,
-        durationMillis: Long?,
-    ) {
-        controller?.let { ctrl ->
-            val dstCameraPosition = MapCameraPosition.from(cameraPosition)
-            if (durationMillis == null || durationMillis == 0L) {
-                ctrl.moveCamera(dstCameraPosition)
-            } else {
-                ctrl.animateCamera(dstCameraPosition, durationMillis)
-            }
-            return@let
-        }
-        this._cameraPosition = cameraPosition
-    }
-
-    override fun fitBounds(
-        bounds: GeoRectBounds,
-        padding: Int,
-    ) {
-        controller?.fitBounds(bounds, padding)
-    }
+    /** 戻り型をこのプロバイダのホルダーへ絞る（アプリが `?.map` を取れる形を保つため）。 */
+    override fun getMapViewHolder(): TomTomMapViewHolder? = super.getMapViewHolder() as? TomTomMapViewHolder
 
     internal fun updateCameraPosition(cameraPosition: MapCameraPosition) {
-        this._cameraPosition = cameraPosition
+        setCameraPositionInternal(cameraPosition)
     }
 }
 

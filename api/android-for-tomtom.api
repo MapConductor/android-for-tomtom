@@ -177,14 +177,10 @@ public final class com.mapconductor.tomtom.TomTomMapViewState extends com.mapcon
   public com.mapconductor.tomtom.TomTomMapViewState(java.lang.String, com.mapconductor.core.map.MapDesignTypeInterface<java.lang.String>, com.mapconductor.core.map.MapCameraPosition);
   public com.mapconductor.tomtom.TomTomMapViewState(java.lang.String, com.mapconductor.core.map.MapDesignTypeInterface, com.mapconductor.core.map.MapCameraPosition, int, kotlin.jvm.internal.DefaultConstructorMarker);
   public java.lang.String getId();
-  public com.mapconductor.core.map.MapCameraPosition getCameraPosition();
   public final kotlinx.coroutines.flow.StateFlow<com.mapconductor.core.map.MapPaddings> getPadding();
   public com.mapconductor.core.map.MapDesignTypeInterface<java.lang.String> getMapDesignType();
   public void setMapDesignType(com.mapconductor.core.map.MapDesignTypeInterface<java.lang.String>);
-  public void moveCameraTo(com.mapconductor.core.features.GeoPoint, java.lang.Long);
   public com.mapconductor.tomtom.TomTomMapViewHolder getMapViewHolder();
-  public void moveCameraTo(com.mapconductor.core.map.MapCameraPosition, java.lang.Long);
-  public void fitBounds(com.mapconductor.core.features.GeoRectBounds, int);
   public java.lang.Object getMapDesignType();
   public void setMapDesignType(java.lang.Object);
   public com.mapconductor.core.map.MapViewHolderInterface getMapViewHolder();
