@@ -24,6 +24,4 @@ class TomTomMapViewHolder(
         val result = map.coordinateForPoint(Point(offset.x.toInt(), offset.y.toInt()))
         return (result as? Result.Success)?.value()?.toGeoPoint()
     }
-
-    override suspend fun fromScreenOffset(offset: Offset): GeoPoint? = fromScreenOffsetSync(offset)
 }
