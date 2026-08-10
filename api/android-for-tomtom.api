@@ -226,21 +226,6 @@ public final class com.mapconductor.tomtom.groundimage.TomTomGroundImageOverlayR
   public com.mapconductor.core.map.MapViewHolderInterface getHolder();
   public java.lang.Object updateGroundImageProperties(java.lang.Object, com.mapconductor.core.groundimage.GroundImageEntityInterface, com.mapconductor.core.groundimage.GroundImageEntityInterface, kotlin.coroutines.Continuation);
 }
-public final class com.mapconductor.tomtom.marker.DefaultTomTomMarkerEventController implements com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface {
-  public com.mapconductor.tomtom.marker.DefaultTomTomMarkerEventController(com.mapconductor.tomtom.marker.TomTomMarkerController);
-  public com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker> getEntity(java.lang.String);
-  public com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker> find(com.mapconductor.core.features.GeoPointInterface);
-  public void dispatchClick(com.mapconductor.core.marker.MarkerState);
-  public void dispatchDragStart(com.mapconductor.core.marker.MarkerState);
-  public void dispatchDrag(com.mapconductor.core.marker.MarkerState);
-  public void dispatchDragEnd(com.mapconductor.core.marker.MarkerState);
-  public void setClickListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setDragStartListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setDragListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setDragEndListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setAnimateStartListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setAnimateEndListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-}
 public final class com.mapconductor.tomtom.marker.MarkerImageCache {
   public static final com.mapconductor.tomtom.marker.MarkerImageCache INSTANCE;
   public final com.tomtom.sdk.map.display.image.Image fromBitmap(android.graphics.Bitmap);
@@ -249,21 +234,6 @@ public final class com.mapconductor.tomtom.marker.MarkerImageCache {
 }
 public interface com.mapconductor.tomtom.marker.MarkerTileRasterLayerCallback {
   public abstract java.lang.Object onRasterLayerUpdate(com.mapconductor.core.raster.RasterLayerState, kotlin.coroutines.Continuation<? super kotlin.Unit>);
-}
-public final class com.mapconductor.tomtom.marker.StrategyTomTomMarkerEventController implements com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface {
-  public com.mapconductor.tomtom.marker.StrategyTomTomMarkerEventController(com.mapconductor.core.marker.StrategyMarkerController<com.tomtom.sdk.map.display.marker.Marker>);
-  public com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker> getEntity(java.lang.String);
-  public com.mapconductor.core.marker.MarkerEntityInterface<com.tomtom.sdk.map.display.marker.Marker> find(com.mapconductor.core.features.GeoPointInterface);
-  public void dispatchClick(com.mapconductor.core.marker.MarkerState);
-  public void dispatchDragStart(com.mapconductor.core.marker.MarkerState);
-  public void dispatchDrag(com.mapconductor.core.marker.MarkerState);
-  public void dispatchDragEnd(com.mapconductor.core.marker.MarkerState);
-  public void setClickListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setDragStartListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setDragListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setDragEndListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setAnimateStartListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public void setAnimateEndListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
 }
 public final class com.mapconductor.tomtom.marker.TomTomMarkerController extends com.mapconductor.core.marker.AbstractMarkerController<com.tomtom.sdk.map.display.marker.Marker> implements com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface, com.mapconductor.core.controller.OnCameraChangeReceiverInterface {
   public static final com.mapconductor.tomtom.marker.TomTomMarkerController$Companion Companion;
@@ -283,17 +253,6 @@ public interface com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface 
 public final class com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface$DefaultImpls {
   public static boolean has(com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface, java.lang.String);
   public static void setClickListenerAny(com.mapconductor.tomtom.marker.TomTomMarkerControllerInterface, java.lang.Object);
-}
-public interface com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface extends com.mapconductor.core.marker.MarkerEventControllerInterface<com.tomtom.sdk.map.display.marker.Marker>, com.mapconductor.core.marker.NativeMarkerClickTargetInterface<com.tomtom.sdk.map.display.marker.Marker>, com.mapconductor.core.marker.GeoMarkerClickTargetInterface<com.tomtom.sdk.map.display.marker.Marker> {
-  public abstract void dispatchDragStart(com.mapconductor.core.marker.MarkerState);
-  public abstract void dispatchDrag(com.mapconductor.core.marker.MarkerState);
-  public abstract void dispatchDragEnd(com.mapconductor.core.marker.MarkerState);
-  public abstract void setClickListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public abstract void setDragStartListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public abstract void setDragListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public abstract void setDragEndListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public abstract void setAnimateStartListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
-  public abstract void setAnimateEndListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.marker.MarkerState, kotlin.Unit>);
 }
 public final class com.mapconductor.tomtom.marker.TomTomMarkerRenderer extends com.mapconductor.core.marker.AbstractMarkerOverlayRenderer<com.mapconductor.tomtom.TomTomMapViewHolder, com.tomtom.sdk.map.display.marker.Marker> {
   public com.mapconductor.tomtom.marker.TomTomMarkerRenderer(com.mapconductor.tomtom.TomTomMapViewHolder, kotlinx.coroutines.CoroutineScope);

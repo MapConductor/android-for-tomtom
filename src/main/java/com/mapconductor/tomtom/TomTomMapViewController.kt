@@ -10,6 +10,7 @@ import com.mapconductor.core.groundimage.GroundImageState
 import com.mapconductor.core.groundimage.OnGroundImageEventHandler
 import com.mapconductor.core.map.MapCameraPosition
 import com.mapconductor.core.map.MapUISettings
+import com.mapconductor.core.marker.DefaultMarkerEventController
 import com.mapconductor.core.marker.MarkerAnimationOverlayHost
 import com.mapconductor.core.marker.MarkerEntityInterface
 import com.mapconductor.core.marker.MarkerEventControllerInterface
@@ -26,10 +27,7 @@ import com.mapconductor.core.raster.RasterLayerCapableInterface
 import com.mapconductor.core.raster.RasterLayerState
 import com.mapconductor.tomtom.circle.TomTomCircleController
 import com.mapconductor.tomtom.groundimage.TomTomGroundImageController
-import com.mapconductor.tomtom.marker.DefaultTomTomMarkerEventController
-import com.mapconductor.tomtom.marker.StrategyTomTomMarkerEventController
 import com.mapconductor.tomtom.marker.TomTomMarkerController
-import com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface
 import com.mapconductor.tomtom.marker.TomTomMarkerRenderer
 import com.mapconductor.tomtom.polygon.TomTomPolygonController
 import com.mapconductor.tomtom.polyline.TomTomPolylineController
@@ -76,7 +74,7 @@ class TomTomMapViewController internal constructor(
     TomTomMapViewControllerInterface,
     RasterLayerCapableInterface,
     TomTomRasterLayerSink {
-    internal val markerEventControllers = mutableListOf<TomTomMarkerEventControllerInterface>()
+    internal val markerEventControllers = mutableListOf<DefaultMarkerEventController<TomTomActualMarker>>()
     private val _mapLoadedState = MutableStateFlow(false)
     val mapLoadedState: StateFlow<Boolean> = _mapLoadedState
 
@@ -114,7 +112,7 @@ class TomTomMapViewController internal constructor(
         registerOverlayController(polygonController)
         registerOverlayController(circleController)
         registerOverlayController(groundImageController)
-        registerMarkerEventController(DefaultTomTomMarkerEventController(markerController))
+        registerMarkerEventController(DefaultMarkerEventController(markerController))
 
         // getMapAsync で得た map は描画準備が整っている想定のため、初期化完了を通知する。
         // notifyMapInitialized は sticky なので、MapViewBase 側のリスナー登録前でも失われない。
@@ -412,14 +410,15 @@ class TomTomMapViewController internal constructor(
 
     fun createMarkerEventController(
         controller: StrategyMarkerController<TomTomActualMarker>,
-    ): MarkerEventControllerInterface<TomTomActualMarker> = StrategyTomTomMarkerEventController(controller)
+    ): MarkerEventControllerInterface<TomTomActualMarker> = DefaultMarkerEventController(controller)
 
     fun registerMarkerEventController(controller: MarkerEventControllerInterface<TomTomActualMarker>) {
-        val typed = controller as? TomTomMarkerEventControllerInterface ?: return
+        @Suppress("UNCHECKED_CAST")
+        val typed = controller as? DefaultMarkerEventController<TomTomActualMarker> ?: return
         registerMarkerEventController(typed)
     }
 
-    internal fun registerMarkerEventController(controller: TomTomMarkerEventControllerInterface) {
+    internal fun registerMarkerEventController(controller: DefaultMarkerEventController<TomTomActualMarker>) {
         if (markerEventControllers.contains(controller)) return
         markerEventControllers.add(controller)
         controller.setClickListener(markerClickListener)
