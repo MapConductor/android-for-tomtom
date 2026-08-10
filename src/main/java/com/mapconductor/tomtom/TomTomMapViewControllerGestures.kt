@@ -29,7 +29,7 @@ internal fun TomTomMapViewController.onMapTouchInternal(event: MotionEvent): Boo
             lastTapScreenX = event.x
             lastTapScreenY = event.y
             val position = holder.fromScreenOffsetSync(Offset(event.x, event.y)) ?: return false
-            val entity = markerController.find(position, holder.map.cameraPosition.zoom)
+            val entity = markerController.find(position)
             if (entity == null || !entity.state.draggable) return false
             pendingEntity = entity
             downX = event.x
