@@ -127,6 +127,24 @@ object TomTomStyleComposer {
             Uri.fromFile(outFile)
         }
 
+    /**
+     * この SDK は宣言した `tileSize` の**倍の大きさ**でタイルを敷く。
+     *
+     * MapConductor の `tileSize` は「タイル 1 枚が覆うレイアウト単位」で、MapLibre は
+     * そのとおりに敷く。同じスタイル JSON を渡しているのに、この SDK は 1 段粗いズームの
+     * タイルを取ってきて 2 倍に引き伸ばす。
+     *
+     * 実測（GeoJSON Layer ページ、地図ズーム 13、`tileSize` 512、Lenovo 実機）:
+     * MapLibre / MapTiler / Longdo が線 6px なのに対し TomTom だけ 12px。
+     * iOS でも同じ倍率（MapLibre 18px に対し TomTom 35px）で、要求されるタイルが
+     * z=12 ではなく z=11 になっていることまで確認してある。半分を宣言すると揃う。
+     *
+     * **ここを外すと GeoJSON レイヤ・ヒートマップ・タイル方式マーカーが揃って 2 倍に
+     * 描かれる**（線が異常に太く、しかもぼやける）。
+     * ios-for-tomtom の `TomTomStyleComposer.tileSizeScale` と同じ扱い。
+     */
+    private const val TILE_SIZE_SCALE = 2
+
     private fun rasterSource(
         tilesUrl: String,
         tileSize: Int,
@@ -136,7 +154,7 @@ object TomTomStyleComposer {
         JSONObject().apply {
             put("type", "raster")
             put("tiles", JSONArray().put(tilesUrl))
-            put("tileSize", tileSize)
+            put("tileSize", (tileSize / TILE_SIZE_SCALE).coerceAtLeast(1))
             minZoom?.let { put("minzoom", it) }
             // maxzoom を設定すると、それ以上のズームでは maxzoom タイルをスケールして
             // 表示する（オーバーズーム）ため、実タイルが無い高ズームでの歯抜けを防ぐ。
