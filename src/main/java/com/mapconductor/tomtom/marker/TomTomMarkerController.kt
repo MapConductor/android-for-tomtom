@@ -1,6 +1,5 @@
 package com.mapconductor.tomtom.marker
 
-import com.mapconductor.core.ResourceProvider
 import com.mapconductor.core.controller.OnCameraChangeReceiverInterface
 import com.mapconductor.core.controller.OverlayControllerInterface
 import com.mapconductor.core.map.MapCameraPosition
@@ -289,10 +288,6 @@ internal class TomTomMarkerController private constructor(
                 cacheSizeBytes = markerTiling.cacheSize,
                 debugTileOverlay = markerTiling.debugTileOverlay,
                 iconScaleCallback = markerTiling.iconScaleCallback,
-                // TomTom は tileSize=256 のラスタソースを「非 retina(256px)」前提で表示するため、
-                // 密度でスケールされた retina タイル(256dp*density px)を渡すとアイコンが density 倍に
-                // 拡大される（他プロバイダは retina を正しく扱う）。アイコン描画を 1/density して相殺する。
-                extraIconScale = 1.0 / ResourceProvider.getDensity(),
             )
         markerTileRenderer = tileRenderer
         tileServer.register(groupId, tileRenderer)
