@@ -1,22 +1,29 @@
-# MapConductor for TomTom
+# TomTom SDK for MapConductor Android
 
-MapConductor の統一マッピング API を [TomTom Orbis Maps Display SDK](https://developer.tomtom.com/android/maps/documentation) 上で実装するモジュールです。
+## Description
 
-> **スコープ**: `MapView` / コントローラ / ViewState / MapDesign に加え、
-> Marker・Polyline・Polygon・Circle・GroundImage・RasterLayer・InfoBubble を実装しています。
-> InfoBubble は共通の `MapViewBase` 経由で描画されるため、本モジュール固有のコードはありません。
+TomTom Orbis Maps provider for the MapConductor unified mapping API, built on
+[TomTom Orbis Maps Display SDK](https://developer.tomtom.com/android/maps/documentation).
 
-> **依存**: `com.tomtom.sdk.maps:map-display-standard`（バージョンは `gradle/libs.versions.toml`
-> の `tomtomMaps` が管理）。
->
-> **検証状況**: コンパイル・単体テスト・ktlint・release AAR 生成が通り、実機（Android）で
-> サンプルを起動して地図描画・マーカー表示・マーカータップ→InfoBubble 表示・
-> **マーカーのドラッグ（自前実装）**・スクリーン座標変換を確認済みです。
+MapConductor provides a unified API for Android Jetpack Compose.
+You can use TomTom with Compose, but you can also switch to other Maps SDKs (such as
+MapLibre, Google Maps, and so on), anytime.
+Even using the wrapper API, you can still access the native TomTom map if you want.
 
-## セットアップ
+`TomTomMapView` supports the same MapConductor content types as the iOS `ios-for-tomtom`
+provider: Marker, Polyline, Polygon, Circle, GroundImage, RasterLayer and InfoBubble.
+InfoBubble is drawn through the shared `MapViewBase`, so this module carries no
+InfoBubble-specific code.
 
-1. TomTom Developer Portal で API キーを取得します。
-2. アプリの `AndroidManifest.xml` にキーを追加します。
+Dependency: `com.tomtom.sdk.maps:map-display-standard` (the version is managed by
+`tomtomMaps` in `gradle/libs.versions.toml`).
+
+## Setup
+
+https://mapconductor.com/setup/android/tomtom/
+
+1. Get a TomTom Orbis Maps API key from the TomTom Developer Portal.
+2. Add the key to your app's `AndroidManifest.xml`.
 
 ```xml
 <meta-data
@@ -24,13 +31,13 @@ MapConductor の統一マッピング API を [TomTom Orbis Maps Display SDK](ht
     android:value="YOUR_TOMTOM_API_KEY" />
 ```
 
-3. `settings.gradle.kts` に TomTom の Maven リポジトリを追加します。
+3. Add the TomTom Maven repository to `settings.gradle.kts`.
 
 ```kotlin
 maven { url = uri("https://repositories.tomtom.com/artifactory/maven") }
 ```
 
-## 使い方
+## Usage
 
 ```kotlin
 val mapState = rememberTomTomMapViewState(
@@ -48,54 +55,261 @@ TomTomMapView(state = mapState, modifier = Modifier.fillMaxSize()) {
 }
 ```
 
-サンプルは `sample-app/` を参照してください。
+See `sample-app/` for a runnable example.
 
-## 構成
+## Available designs
 
-| ファイル | 役割 |
+`TomTomMapDesign` exposes the TomTom Orbis styles: `Standard`, `Driving`, `Satellite`.
+
+## Supported overlays
+
+Marker (including clustering and tile-rendered large marker sets), Polyline, Polygon
+(holes supported), Circle, GroundImage, RasterLayer and InfoBubble — the same unified API
+as the other providers.
+
+## Components
+
+### TomTomMapView [[docs]](https://mapconductor.com/mapview/)
+
+```kotlin
+@Composable
+fun MapExample() {
+    val initCameraPosition = MapCameraPosition(
+        position = GeoPoint(
+            latitude = 34.091,
+            longitude = -117.886,
+        ),
+        zoom = 9.0,
+        tilt = 60.0,
+        bearing = 30.0,
+    )
+
+    val mapViewState = rememberTomTomMapViewState(
+        cameraPosition = initCameraPosition,
+    )
+
+    TomTomMapView(mapViewState)
+}
+```
+
+------------------------------------------------------------------------
+
+### Marker [[docs]](https://mapconductor.com/markers/)
+
+```kotlin
+@Composable
+fun MarkerExample() {
+    val markerState = remember { MarkerState(
+        position = GeoPoint(...),
+        icon = DefaultMarkerIcon().copy(
+            label = "TomTom",
+        ),
+        onClick = {
+            it.animate(MarkerAnimation.Bounce)
+        },
+    ) }
+
+    TomTomMapView(...) {
+        Marker(markerState)
+    }
+}
+```
+
+------------------------------------------------------------------------
+
+### InfoBubble [[docs]](https://mapconductor.com/info-bubble/)
+
+```kotlin
+@Composable
+fun InfoBubbleExample() {
+    var selectedMarker by remember { mutableStateOf<MarkerState?>(null) }
+
+    val markerState = remember { MarkerState(
+        ...,
+        onClick = {
+            selectedMarker = it
+        },
+    ) }
+
+    TomTomMapView(...) {
+        Marker(markerState)
+        selectedMarker?.let {
+            InfoBubble(
+                marker = it,
+            ) {
+                Text("Hello, world!")
+            }
+        }
+    }
+}
+```
+
+------------------------------------------------------------------------
+
+### Circle [[docs]](https://mapconductor.com/circle/)
+
+```kotlin
+@Composable
+fun CircleExample() {
+
+    val circleState = remember { CircleState(
+        center = GeoPoint(...),
+        radiusMeters = 50.0,
+        fillColor = Color.Blue.copy(alpha = 0.5f),
+        onClick = {
+            it.state.fillColor = Color.Red.copy(alpha = 0.5f)
+        }
+    ) }
+
+    TomTomMapView(...) {
+        Circle(circleState)
+    }
+}
+```
+
+------------------------------------------------------------------------
+
+### Polyline [[docs]](https://mapconductor.com/polyline/)
+
+```kotlin
+@Composable
+fun PolylineExample() {
+
+    val polylineState = remember { PolylineState(
+            points = airports,
+            strokeColor = Color.Blue.copy(alpha = 0.5f),
+            strokeWidth = 4.dp,
+            geodesic = true,
+        ) }
+
+    TomTomMapView(...) {
+        Polyline(polylineState)
+    }
+}
+```
+
+------------------------------------------------------------------------
+
+### Polygon [[docs]](https://mapconductor.com/polygon/)
+
+```kotlin
+@Composable
+fun PolygonExample() {
+
+    val polygonState = remember { PolygonState(
+        points = goryokaku,
+        strokeColor = Color.Blue.copy(alpha = 0.5f),
+        fillColor =  Color.Red.copy(alpha = 0.7f),
+    ) }
+
+    TomTomMapView(...) {
+        Polygon(polygonState)
+    }
+}
+```
+
+------------------------------------------------------------------------
+
+### Polygon Hole
+
+```kotlin
+@Composable
+fun PolygonHoleExample() {
+
+    val polygonState =
+        remember {
+            PolygonState(
+                points = listOf(...),
+                holes = listOf(
+                            listOf(...),
+                            listOf(...),
+                        ),
+                fillColor = Color(0xCC787880),
+                strokeColor = Color.Red,
+                strokeWidth = 2.dp,
+            )
+        }
+
+    TomTomMapView(...) {
+        Polygon(polygonState)
+    }
+}
+```
+
+------------------------------------------------------------------------
+
+### GroundImage [[docs]](https://mapconductor.com/ground-image/)
+
+```kotlin
+@Composable
+fun GroundImageExample() {
+    val groundImageState = remember { GroundImageState(
+        bounds = GeoRectBounds(
+            southWest = GeoPoint.fromLatLong(...),
+            northEast = GeoPoint.fromLatLong(...),
+        ),
+        image = image,
+        opacity = 0.5f,
+    ) }
+
+    TomTomMapView(state = mapViewState) {
+        GroundImage(groundImageState)
+    }
+}
+```
+
+## Files
+
+| File | Role |
 | --- | --- |
-| `TomTomMapView.kt` | Compose エントリーポイント / コントローラ生成 |
-| `TomTomMapViewController.kt` | カメラ・マーカー・デザインの中枢コントローラ |
-| `TomTomMapViewStateImpl.kt` | `rememberTomTomMapViewState` と状態保存 |
-| `TomTomMapViewHolder.kt` | `MapView` / `TomTomMap` のラッパ、座標変換 |
-| `TomTomMapDesign.kt` | スタイル（マップデザイン）定義 |
-| `MapCameraPosition.kt` | カメラ座標の相互変換 |
-| `GeoPoint.kt` / `GeoRectBounds.kt` | 座標型の相互変換 |
-| `marker/` | ネイティブマーカーの描画・イベント |
-| `polyline/` / `polygon/` / `circle/` | ベクタオーバーレイの描画（測地線はコア共通の補間を使用） |
-| `groundimage/` | 画像付き Polygon としてのグラウンドイメージ |
-| `raster/TomTomStyleComposer.kt` | ラスターソースを注入した合成 style JSON の組み立て |
-| `raster/TomTomRasterLayerSink.kt` | ラスターレイヤー状態の合成スタイルへの反映 |
-| `zoom/ZoomAltitudeConverter.kt` | ズーム↔高度の換算 |
+| `TomTomMapView.kt` | Compose entry point / controller construction |
+| `TomTomMapViewController.kt` | Central controller for camera, markers and design |
+| `TomTomMapViewStateImpl.kt` | `rememberTomTomMapViewState` and state retention |
+| `TomTomMapViewHolder.kt` | `MapView` / `TomTomMap` wrapper, coordinate conversion |
+| `TomTomMapDesign.kt` | Style (map design) definitions |
+| `MapCameraPosition.kt` | Camera position conversions |
+| `GeoPoint.kt` / `GeoRectBounds.kt` | Coordinate type conversions |
+| `marker/` | Native marker rendering and events |
+| `polyline/` / `polygon/` / `circle/` | Vector overlay rendering (geodesics use the shared core interpolation) |
+| `groundimage/` | Ground image as an image-backed Polygon |
+| `raster/TomTomStyleComposer.kt` | Builds a composed style JSON with injected raster sources |
+| `raster/TomTomRasterLayerSink.kt` | Applies raster layer state to the composed style |
+| `zoom/ZoomAltitudeConverter.kt` | Zoom ↔ altitude conversion |
 
-## 実装メモ / 既知の制限
+## Implementation notes / known limitations
 
-- **Compose 埋め込み**: `MapOptions(renderToTexture = true)` を指定している。既定の SurfaceView 描画だと
-  Compose の `SubcomposeLayout` の計測と競合し、描画位置がずれるため。
-- **サンプルのテーマ**: TomTom の UI オーバーレイ（ロゴ・コンパス等）は AppCompat 系テーマを推奨する
-  旨のログ警告が出る（描画自体は動作）。プロダクトでは `Theme.AppCompat`／`Theme.MaterialComponents`
-  系テーマの利用を推奨。
-- **`fitBounds`**: `CameraOptionsFactory.lookAt(bounds, zoom = null, padding)` に委譲する。
-  `zoom = null` とすることでズームは TomTom 側の自動計算に任せ、`padding`(px) はそのまま渡す。
-- **ポリゴンの穴 / 測地線**: 頂点列の測地線補間・子午線分割・複数穴の結合はコア共通の
-  ユーティリティ（`WGS84Geodesic` / `buildUnwrappedPolygonRings` / `unionHoles`）を再利用し、
-  他プロバイダと同じ形状になるようにしている。TomTom は座標間を直線で結ぶため、測地線は
-  補間した座標列で近似する。
-- **グラウンドイメージ**: `PolygonOptions.isImageOverlay` を有効にした画像付き Polygon で描画する
-  （画像がポリゴンの矩形全体へ引き伸ばされる）。境界・画像・色の変更はマーカーと同様、既存の
-  ネイティブ Polygon をその場で更新する（削除→再生成しない）。
-- **ラスターレイヤー**: TomTom Map Display SDK には実行時に source / layer を追加する公開 API が
-  無いため、ベーススタイルへラスターソースを注入した style JSON を組み立て、ローカルの
-  `file://` URI として `loadStyle` する（`raster/TomTomStyleComposer.kt`）。
-- **マーカー変更/移動**: TomTom の `Marker` は `coordinate` / `isVisible` が可変で `setPinImage()` も
-  あるため、位置・表示・アイコンの更新は既存インスタンスをその場で更新する（削除→再生成しない）。
-  ドラッグ中に毎フレーム削除→再生成するとメインスレッドが詰まって ANR になるため重要。
-- **ドラッグ（自前実装）**: TomTom はマーカーのネイティブドラッグを持たないため、`MapView` の
-  `MotionEvent` を直接処理して実装している（ArcGIS モジュールと同じ方針）。draggable マーカー上の
-  タッチでジェスチャを占有して地図パンを抑止し、スロップ超えの移動でドラッグ開始→指に追従、
-  離して確定。動かず離した場合はクリック（`onClick`）として扱う。指の画面座標→地理座標は
-  `TomTomMap.coordinateForPoint`、マーカーの再配置は `Marker.coordinate` 更新で行う。
+- **Compose embedding**: `MapOptions(renderToTexture = true)` is set. The default SurfaceView
+  rendering conflicts with the measurement pass of Compose's `SubcomposeLayout`, which shifts
+  the drawing position.
+- **Sample theme**: TomTom's UI overlays (logo, compass, and so on) log a warning recommending
+  an AppCompat-family theme (rendering itself still works). For production, prefer
+  `Theme.AppCompat` / `Theme.MaterialComponents`.
+- **`fitBounds`**: delegates to `CameraOptionsFactory.lookAt(bounds, zoom = null, padding)`.
+  Passing `zoom = null` leaves the zoom to TomTom's own calculation; `padding` (px) is passed
+  through as is.
+- **Polygon holes / geodesics**: geodesic interpolation of vertices, antimeridian splitting and
+  multi-hole unioning reuse the shared core utilities (`WGS84Geodesic` /
+  `buildUnwrappedPolygonRings` / `unionHoles`) so the resulting shape matches the other
+  providers. TomTom connects coordinates with straight lines, so geodesics are approximated by
+  the interpolated coordinate list.
+- **Ground images**: drawn as an image-backed Polygon with `PolygonOptions.isImageOverlay`
+  enabled (the image is stretched over the polygon's bounding rectangle). Bounds, image and
+  color changes update the existing native Polygon in place, as with markers — no
+  remove-then-recreate.
+- **Raster layers**: the TomTom Map Display SDK has no public API for adding sources/layers at
+  runtime, so a style JSON with raster sources injected into the base style is composed and
+  loaded as a local `file://` URI (`raster/TomTomStyleComposer.kt`).
+- **Marker updates / movement**: TomTom's `Marker` has mutable `coordinate` / `isVisible` and a
+  `setPinImage()`, so position, visibility and icon updates mutate the existing instance rather
+  than removing and recreating it. This matters: removing and recreating every frame during a
+  drag blocks the main thread and causes an ANR.
+- **Drag (custom implementation)**: TomTom has no native marker drag, so it is implemented by
+  handling `MotionEvent` on the `MapView` directly (the same approach as the ArcGIS module).
+  A touch on a draggable marker owns the gesture and suppresses map panning; movement beyond the
+  slop starts the drag and the marker follows the finger; releasing commits it. Releasing without
+  moving is treated as a click (`onClick`). The finger's screen coordinate is converted with
+  `TomTomMap.coordinateForPoint`, and the marker is repositioned by updating `Marker.coordinate`.
 
-## ライセンス
+## License
 
 Apache License 2.0
