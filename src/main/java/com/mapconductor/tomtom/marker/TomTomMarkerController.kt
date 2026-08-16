@@ -1,16 +1,13 @@
 package com.mapconductor.tomtom.marker
 
-import com.mapconductor.core.ResourceProvider
 import com.mapconductor.core.controller.OnCameraChangeReceiverInterface
 import com.mapconductor.core.controller.OverlayControllerInterface
-import com.mapconductor.core.features.GeoPointInterface
 import com.mapconductor.core.map.MapCameraPosition
 import com.mapconductor.core.marker.AbstractMarkerController
 import com.mapconductor.core.marker.BitmapIcon
 import com.mapconductor.core.marker.DefaultMarkerIcon
 import com.mapconductor.core.marker.MarkerEntity
 import com.mapconductor.core.marker.MarkerEntityInterface
-import com.mapconductor.core.marker.MarkerHitTest
 import com.mapconductor.core.marker.MarkerIngestionEngine
 import com.mapconductor.core.marker.MarkerManager
 import com.mapconductor.core.marker.MarkerOverlayRendererInterface
@@ -97,37 +94,6 @@ internal class TomTomMarkerController private constructor(
 
     internal fun setRasterLayerCallback(callback: MarkerTileRasterLayerCallback?) {
         rasterLayerCallback = callback
-    }
-
-    override fun find(position: GeoPointInterface): MarkerEntityInterface<TomTomActualMarker>? =
-        find(position = position, zoom = lastKnownZoom)
-
-    /**
-     * ネイティブの marker click に乗らないマーカー（タイル描画されたもの）を、地図クリックから
-     * 拾うためのヒットテスト。
-     *
-     * 判定は他プロバイダと同じ [MarkerHitTest]（アイコン矩形 + tapTolerance）。以前は
-     * 「tapTolerance を metersPerPixel で距離へ換算した固定半径」で測地距離と比較していたため、
-     * アイコンの大きさを一切見ておらず、大きいアイコンは端をタップしても反応せず、小さいアイコンは
-     * 離れていても反応していた。
-     *
-     * @param zoom 呼び出し側が握っているカメラのズーム。判定自体は画面座標で行うため使わないが、
-     *   既存の呼び出し側シグネチャを保つために残している。
-     */
-    @Suppress("UNUSED_PARAMETER")
-    fun find(
-        position: GeoPointInterface,
-        zoom: Double,
-    ): MarkerEntityInterface<TomTomActualMarker>? {
-        val nearest = markerManager.findNearest(position) ?: return null
-        val touchScreen = renderer.holder.toScreenOffset(position) ?: return null
-        val markerScreen = renderer.holder.toScreenOffset(nearest.state.position) ?: return null
-
-        return if (MarkerHitTest.hitsIcon(touchScreen, markerScreen, nearest.state)) {
-            nearest
-        } else {
-            null
-        }
     }
 
     override suspend fun add(data: List<MarkerState>) {
@@ -322,10 +288,6 @@ internal class TomTomMarkerController private constructor(
                 cacheSizeBytes = markerTiling.cacheSize,
                 debugTileOverlay = markerTiling.debugTileOverlay,
                 iconScaleCallback = markerTiling.iconScaleCallback,
-                // TomTom は tileSize=256 のラスタソースを「非 retina(256px)」前提で表示するため、
-                // 密度でスケールされた retina タイル(256dp*density px)を渡すとアイコンが density 倍に
-                // 拡大される（他プロバイダは retina を正しく扱う）。アイコン描画を 1/density して相殺する。
-                extraIconScale = 1.0 / ResourceProvider.getDensity(),
             )
         markerTileRenderer = tileRenderer
         tileServer.register(groupId, tileRenderer)

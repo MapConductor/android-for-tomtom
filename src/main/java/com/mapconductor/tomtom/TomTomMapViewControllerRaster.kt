@@ -21,8 +21,13 @@ import kotlinx.coroutines.withContext
  * TomTom はスタイルにレイヤーを後から足せないため、ラスターが増減するたびに
  * スタイル JSON を作り直して読み込ませる。読み込みは重いので
  * [scheduleComposedStyleReload] でまとめてから 1 回だけ走らせる。
+ *
+ * **[createTomTomMapViewController] の直後に必ず呼ぶこと。** Compose の
+ * [TomTomMapView] も React Native の `TomTomMapViewWrapper` もここを通る。
+ * 呼ばないと、コントローラは件数を見てタイル経路へ倒すのに載せる先の
+ * ラスタレイヤが無く、**大量マーカーが 1 つも描かれない**（例外も警告も出ない）。
  */
-internal fun TomTomMapViewController.setupMarkerTileRaster(
+fun TomTomMapViewController.setupMarkerTileRaster(
     apiKey: String,
     cacheDir: File,
 ) {

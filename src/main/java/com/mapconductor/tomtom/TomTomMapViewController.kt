@@ -4,18 +4,20 @@ import com.mapconductor.core.circle.CircleState
 import com.mapconductor.core.circle.OnCircleEventHandler
 import com.mapconductor.core.controller.BaseMapViewController
 import com.mapconductor.core.features.GeoPoint
+import com.mapconductor.core.features.GeoPointInterface
 import com.mapconductor.core.features.GeoRectBounds
 import com.mapconductor.core.groundimage.GroundImageState
 import com.mapconductor.core.groundimage.OnGroundImageEventHandler
 import com.mapconductor.core.map.MapCameraPosition
 import com.mapconductor.core.map.MapUISettings
+import com.mapconductor.core.marker.DefaultMarkerEventController
 import com.mapconductor.core.marker.MarkerAnimationOverlayHost
 import com.mapconductor.core.marker.MarkerEntityInterface
 import com.mapconductor.core.marker.MarkerEventControllerInterface
 import com.mapconductor.core.marker.MarkerOverlayRendererInterface
-import com.mapconductor.core.marker.MarkerState
 import com.mapconductor.core.marker.OnMarkerEventHandler
 import com.mapconductor.core.marker.StrategyMarkerController
+import com.mapconductor.core.marker.dispatchGeoMarkerClick
 import com.mapconductor.core.polygon.OnPolygonEventHandler
 import com.mapconductor.core.polygon.PolygonState
 import com.mapconductor.core.polyline.OnPolylineEventHandler
@@ -25,10 +27,7 @@ import com.mapconductor.core.raster.RasterLayerCapableInterface
 import com.mapconductor.core.raster.RasterLayerState
 import com.mapconductor.tomtom.circle.TomTomCircleController
 import com.mapconductor.tomtom.groundimage.TomTomGroundImageController
-import com.mapconductor.tomtom.marker.DefaultTomTomMarkerEventController
-import com.mapconductor.tomtom.marker.StrategyTomTomMarkerEventController
 import com.mapconductor.tomtom.marker.TomTomMarkerController
-import com.mapconductor.tomtom.marker.TomTomMarkerEventControllerInterface
 import com.mapconductor.tomtom.marker.TomTomMarkerRenderer
 import com.mapconductor.tomtom.polygon.TomTomPolygonController
 import com.mapconductor.tomtom.polyline.TomTomPolylineController
@@ -75,7 +74,7 @@ class TomTomMapViewController internal constructor(
     TomTomMapViewControllerInterface,
     RasterLayerCapableInterface,
     TomTomRasterLayerSink {
-    internal val markerEventControllers = mutableListOf<TomTomMarkerEventControllerInterface>()
+    internal val markerEventControllers = mutableListOf<DefaultMarkerEventController<TomTomActualMarker>>()
     private val _mapLoadedState = MutableStateFlow(false)
     val mapLoadedState: StateFlow<Boolean> = _mapLoadedState
 
@@ -113,7 +112,7 @@ class TomTomMapViewController internal constructor(
         registerOverlayController(polygonController)
         registerOverlayController(circleController)
         registerOverlayController(groundImageController)
-        registerMarkerEventController(DefaultTomTomMarkerEventController(markerController))
+        registerMarkerEventController(DefaultMarkerEventController(markerController))
 
         // getMapAsync で得た map は描画準備が整っている想定のため、初期化完了を通知する。
         // notifyMapInitialized は sticky なので、MapViewBase 側のリスナー登録前でも失われない。
@@ -136,13 +135,6 @@ class TomTomMapViewController internal constructor(
 
     // 拡張ファイル（Gestures / Camera / Raster）からは基底クラスの protected へ
     // 触れないため、ここで internal の入口を用意しておく。
-    internal fun emitMapClick(point: GeoPoint) {
-        mapClickCallback?.invoke(point)
-    }
-
-    internal fun emitMapLongClick(point: GeoPoint) {
-        mapLongClickCallback?.invoke(point)
-    }
 
     internal fun emitCameraMoveStart(position: MapCameraPosition) {
         cameraMoveStartCallback?.invoke(position)
@@ -162,6 +154,16 @@ class TomTomMapViewController internal constructor(
 
     internal fun correctForCameraRestriction(current: MapCameraPosition): MapCameraPosition? =
         cameraRestrictionCorrection(current)
+
+    /**
+     * タイル描画されたマーカーのヒットテスト。
+     *
+     * ネイティブの `Marker` として描かれたものは MarkerClickListener が先に消費するので
+     * ここへは来ない（[com.mapconductor.core.marker.dispatchNativeMarkerClick]）。
+     * 呼び出し元がメインスレッドなので `pointForCoordinate` を触ってよい。
+     */
+    override fun dispatchMarkerTap(position: GeoPointInterface): Boolean =
+        markerEventControllers.dispatchGeoMarkerClick(position)
 
     internal fun mapClickHandler(): ((GeoPoint) -> Unit)? = mapClickCallback
 
@@ -211,21 +213,11 @@ class TomTomMapViewController internal constructor(
         circleController.clear()
     }
 
-    override suspend fun compositionMarkers(data: List<MarkerState>) = markerController.add(data)
-
     override fun setMarkerAnimationOverlayHost(host: MarkerAnimationOverlayHost?) {
         (markerController.renderer as TomTomMarkerRenderer).animationOverlayHost = host
     }
 
-    override suspend fun updateMarker(state: MarkerState) = markerController.update(state)
-
-    override fun hasMarker(state: MarkerState): Boolean = this.markerController.markerManager.hasEntity(state.id)
-
     // ---- Polyline / Polygon / Circle capable ------------------------------
-
-    override suspend fun compositionPolylines(data: List<PolylineState>) = polylineController.add(data)
-
-    override suspend fun updatePolyline(state: PolylineState) = polylineController.update(state)
 
     override fun hasPolyline(state: PolylineState): Boolean = polylineController.polylineManager.hasEntity(state.id)
 
@@ -234,20 +226,12 @@ class TomTomMapViewController internal constructor(
         polylineController.clickListener = listener
     }
 
-    override suspend fun compositionPolygons(data: List<PolygonState>) = polygonController.add(data)
-
-    override suspend fun updatePolygon(state: PolygonState) = polygonController.update(state)
-
     override fun hasPolygon(state: PolygonState): Boolean = polygonController.polygonManager.hasEntity(state.id)
 
     @Deprecated("Use PolygonState.onClick instead.")
     override fun setOnPolygonClickListener(listener: OnPolygonEventHandler?) {
         polygonController.clickListener = listener
     }
-
-    override suspend fun compositionCircles(data: List<CircleState>) = circleController.add(data)
-
-    override suspend fun updateCircle(state: CircleState) = circleController.update(state)
 
     override fun hasCircle(state: CircleState): Boolean = circleController.circleManager.hasEntity(state.id)
 
@@ -411,10 +395,6 @@ class TomTomMapViewController internal constructor(
 
     // ---- GroundImage（画像付き native Polygon で描画） --------------------------------------
 
-    override suspend fun compositionGroundImages(data: List<GroundImageState>) = groundImageController.add(data)
-
-    override suspend fun updateGroundImage(state: GroundImageState) = groundImageController.update(state)
-
     override fun hasGroundImage(state: GroundImageState): Boolean =
         groundImageController.groundImageManager.hasEntity(state.id)
 
@@ -430,14 +410,15 @@ class TomTomMapViewController internal constructor(
 
     fun createMarkerEventController(
         controller: StrategyMarkerController<TomTomActualMarker>,
-    ): MarkerEventControllerInterface<TomTomActualMarker> = StrategyTomTomMarkerEventController(controller)
+    ): MarkerEventControllerInterface<TomTomActualMarker> = DefaultMarkerEventController(controller)
 
     fun registerMarkerEventController(controller: MarkerEventControllerInterface<TomTomActualMarker>) {
-        val typed = controller as? TomTomMarkerEventControllerInterface ?: return
+        @Suppress("UNCHECKED_CAST")
+        val typed = controller as? DefaultMarkerEventController<TomTomActualMarker> ?: return
         registerMarkerEventController(typed)
     }
 
-    internal fun registerMarkerEventController(controller: TomTomMarkerEventControllerInterface) {
+    internal fun registerMarkerEventController(controller: DefaultMarkerEventController<TomTomActualMarker>) {
         if (markerEventControllers.contains(controller)) return
         markerEventControllers.add(controller)
         controller.setClickListener(markerClickListener)

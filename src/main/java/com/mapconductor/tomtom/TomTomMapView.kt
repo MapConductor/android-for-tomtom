@@ -16,6 +16,8 @@ import com.mapconductor.core.OnMapLoadedHandler
 import com.mapconductor.core.map.CameraRestriction
 import com.mapconductor.core.map.MapCameraPosition
 import com.mapconductor.core.map.MapCameraPositionInterface
+import com.mapconductor.core.map.MapCapability
+import com.mapconductor.core.map.MapCapabilityStatus
 import com.mapconductor.core.map.MutableMapServiceRegistry
 import com.mapconductor.core.marker.MarkerEventControllerInterface
 import com.mapconductor.core.marker.MarkerOverlayRendererInterface
@@ -211,6 +213,18 @@ fun createTomTomMapViewController(
             groundImageController = groundImageController,
         )
     serviceRegistry?.let { registry ->
+        // オーバーレイをタップに対して透過させられない（実測 2026-08-09、Lenovo TB520FU）。
+        // PolygonOptions / PolylineOptions の isClickable = false は「透過」ではなく
+        // 「握り潰し」で、MapClickListener にも届かない。MarkerOptions には
+        // isClickable 自体が無い。よってネイティブのクリックリスナー経由で受ける
+        // （判定はコアが行うのでアプリから見た挙動は他プロバイダと揃う）。
+        registry.declare(
+            MapCapability.ClickPassthrough,
+            MapCapabilityStatus.Unsupported(
+                "isClickable=false swallows the tap instead of passing it to MapClickListener; " +
+                    "MarkerOptions has no isClickable at all",
+            ),
+        )
         registry.put(
             MarkerRenderingSupportKey,
             object : MarkerRenderingSupport<TomTomActualMarker> {
