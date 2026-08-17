@@ -22,6 +22,8 @@ Dependency: `com.tomtom.sdk.maps:map-display-standard` (the version is managed b
 
 https://mapconductor.com/setup/android/tomtom/
 
+### API key
+
 1. Get a TomTom Orbis Maps API key from the TomTom Developer Portal.
 2. Add the key to your app's `AndroidManifest.xml`.
 
