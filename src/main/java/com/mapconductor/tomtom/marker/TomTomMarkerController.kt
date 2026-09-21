@@ -288,6 +288,7 @@ internal class TomTomMarkerController private constructor(
                 cacheSizeBytes = markerTiling.cacheSize,
                 debugTileOverlay = markerTiling.debugTileOverlay,
                 iconScaleCallback = markerTiling.iconScaleCallback,
+                declutterPx = markerTiling.declutterPx,
             )
         markerTileRenderer = tileRenderer
         tileServer.register(groupId, tileRenderer)
