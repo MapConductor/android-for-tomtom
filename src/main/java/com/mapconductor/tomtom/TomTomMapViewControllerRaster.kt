@@ -85,7 +85,10 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
     if (destroyed) return
     val apiKey = rasterApiKey
     val cacheDir = rasterCacheDir
-    if (composedRasterLayers.isEmpty() || apiKey == null || cacheDir == null) {
+    // 「ベースマップ無し」自体が合成スタイル（合成器のコメント参照）なので、
+    // ラスタレイヤーが無くても None なら合成する。
+    val withoutBasemap = mapDesignType.id == TomTomMapDesign.None.id
+    if ((composedRasterLayers.isEmpty() && !withoutBasemap) || apiKey == null || cacheDir == null) {
         loadDesignStyle()
         return
     }
@@ -97,6 +100,7 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
             cacheDir = cacheDir,
             layers = composedRasterLayers.values.toList(),
             outFile = outFile,
+            withoutBasemap = withoutBasemap,
         ) ?: return
     if (destroyed) return
     withContext(Dispatchers.Main) {

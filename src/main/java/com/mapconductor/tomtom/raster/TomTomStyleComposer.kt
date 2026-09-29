@@ -1,5 +1,6 @@
 package com.mapconductor.tomtom.raster
 
+import com.mapconductor.core.map.BlankMapStyle
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -74,6 +75,8 @@ object TomTomStyleComposer {
         cacheDir: File,
         layers: List<RasterSpec>,
         outFile: File = File(cacheDir, "tomtom_composed_style.json"),
+        // [TomTomMapDesign.None]: ベースマップを描かない（本文のコメント参照）。
+        withoutBasemap: Boolean = false,
     ): Uri? =
         withContext(Dispatchers.IO) {
             val baseJson =
@@ -91,21 +94,50 @@ object TomTomStyleComposer {
                 }
 
             val sources = root.optJSONObject("sources") ?: JSONObject().also { root.put("sources", it) }
-            sources.put("mc-base-raster", rasterSource(String.format(BASE_RASTER_TILES, apiKey), TILE_SIZE, null, null))
-
             val styleLayers = root.optJSONArray("layers") ?: JSONArray().also { root.put("layers", it) }
-            // 可視ベース地図（ラスタ）は最下層付近（"background" の直後）に挿入し、
-            // ラベル/オーバーレイ/マーカーがその上に来るようにする。
-            val baseLayer = rasterLayer("mc-base-raster-layer", "mc-base-raster", 1.0)
-            val insertAt =
-                if (styleLayers.length() > 0 &&
-                    styleLayers.optJSONObject(0)?.optString("type") == "background"
-                ) {
-                    1
-                } else {
-                    0
+            if (withoutBasemap) {
+                // browsing スタイルを骨組みのまま残し（この SDK は自前のレイヤーを持たない
+                // スタイルを渡すと既定スタイルへ戻る）、background 以外の全レイヤーを
+                // 非表示にする。TomTom のタイルは取得されず、ラスタは背景色の上に載る。
+                // この SDK は読み込み後に自分のレイヤーの visibility を戻す（実測: 非表示だけでは
+                // ベースマップが残った。iOS 版はそれで消える）ので、不透明度も 0 にする。
+                for (i in 0 until styleLayers.length()) {
+                    val layer = styleLayers.optJSONObject(i) ?: continue
+                    val type = layer.optString("type")
+                    if (type == "background") {
+                        layer.put("paint", JSONObject().put("background-color", BlankMapStyle.BACKGROUND_COLOR))
+                        continue
+                    }
+                    val layout = layer.optJSONObject("layout") ?: JSONObject().also { layer.put("layout", it) }
+                    layout.put("visibility", "none")
+                    val paint = layer.optJSONObject("paint") ?: JSONObject().also { layer.put("paint", it) }
+                    when (type) {
+                        "fill" -> paint.put("fill-opacity", 0)
+                        "line" -> paint.put("line-opacity", 0)
+                        "symbol" -> { paint.put("text-opacity", 0); paint.put("icon-opacity", 0) }
+                        "raster" -> paint.put("raster-opacity", 0)
+                        "fill-extrusion" -> paint.put("fill-extrusion-opacity", 0)
+                        "circle" -> { paint.put("circle-opacity", 0); paint.put("circle-stroke-opacity", 0) }
+                        "heatmap" -> paint.put("heatmap-opacity", 0)
+                        "hillshade" -> paint.put("hillshade-exaggeration", 0)
+                    }
                 }
-            insertLayerAt(styleLayers, insertAt, baseLayer)
+            } else {
+                sources.put("mc-base-raster", rasterSource(String.format(BASE_RASTER_TILES, apiKey), TILE_SIZE, null, null))
+
+                // 可視ベース地図（ラスタ）は最下層付近（"background" の直後）に挿入し、
+                // ラベル/オーバーレイ/マーカーがその上に来るようにする。
+                val baseLayer = rasterLayer("mc-base-raster-layer", "mc-base-raster", 1.0)
+                val insertAt =
+                    if (styleLayers.length() > 0 &&
+                        styleLayers.optJSONObject(0)?.optString("type") == "background"
+                    ) {
+                        1
+                    } else {
+                        0
+                    }
+                insertLayerAt(styleLayers, insertAt, baseLayer)
+            }
 
             // 自前ラスタレイヤー（マーカータイル / GroundImage など）を最前面（末尾）へ順に重ねる。
             layers.forEachIndexed { index, spec ->

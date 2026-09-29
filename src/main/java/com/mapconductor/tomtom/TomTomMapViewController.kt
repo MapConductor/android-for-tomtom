@@ -299,6 +299,16 @@ class TomTomMapViewController internal constructor(
         val descriptor =
             (value as? TomTomMapDesign)?.styleDescriptor
                 ?: TomTomMapDesign.create(value.id).styleDescriptor
+        // ラスタレイヤーがあるあいだは合成スタイルが地図の実体で、デザインはその
+        // 土台（ベースマップの有無）に効く。素のスタイルを読むとラスタごと消える。
+        // 「無し」自体も合成スタイル（合成器のコメント参照）。
+        val wasNone = mapDesignType.id == TomTomMapDesign.None.id
+        if (composedRasterLayers.isNotEmpty() || value.id == TomTomMapDesign.None.id || wasNone) {
+            mapDesignType = value
+            scheduleComposedStyleReload()
+            mapDesignTypeChangeListener?.invoke(value)
+            return
+        }
         mainCoroutine.launch {
             holder.map.loadStyle(
                 descriptor,

@@ -3,6 +3,8 @@ package com.mapconductor.tomtom
 import com.mapconductor.core.map.AttributionRule
 import com.mapconductor.core.map.MapDesignTypeInterface
 import com.tomtom.sdk.map.display.style.StandardStyles
+import android.net.Uri
+import com.mapconductor.core.map.BlankMapStyle
 import com.tomtom.sdk.map.display.style.StyleDescriptor
 
 typealias TomTomMapDesignType = MapDesignTypeInterface<String>
@@ -33,6 +35,9 @@ sealed class TomTomMapDesign(
     override val attributionRules: List<AttributionRule> = emptyList(),
 ) : TomTomMapDesignType {
     /** 既定（ブラウジング）スタイル。 */
+    /** ベースマップ無し。背景色だけのスタイル（core の同梱アセット）。 */
+    object None : TomTomMapDesign("none", StyleDescriptor(Uri.parse(BlankMapStyle.ASSET_URI)))
+
     object Standard : TomTomMapDesign("standard", StandardStyles.TomTomMaps.BROWSING)
 
     /** ナビゲーション向けスタイル。 */
@@ -53,6 +58,7 @@ sealed class TomTomMapDesign(
     companion object {
         fun create(id: String): TomTomMapDesign =
             when (id) {
+                None.id -> None
                 Standard.id -> Standard
                 Driving.id -> Driving
                 Satellite.id -> Satellite

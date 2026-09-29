@@ -40,6 +40,9 @@ public final class com.mapconductor.tomtom.TomTomMapDesign$Custom extends com.ma
 public final class com.mapconductor.tomtom.TomTomMapDesign$Driving extends com.mapconductor.tomtom.TomTomMapDesign {
   public static final com.mapconductor.tomtom.TomTomMapDesign$Driving INSTANCE;
 }
+public final class com.mapconductor.tomtom.TomTomMapDesign$None extends com.mapconductor.tomtom.TomTomMapDesign {
+  public static final com.mapconductor.tomtom.TomTomMapDesign$None INSTANCE;
+}
 public final class com.mapconductor.tomtom.TomTomMapDesign$Satellite extends com.mapconductor.tomtom.TomTomMapDesign {
   public static final com.mapconductor.tomtom.TomTomMapDesign$Satellite INSTANCE;
 }
@@ -326,7 +329,7 @@ public final class com.mapconductor.tomtom.raster.TomTomRasterLayerSink$DefaultI
 }
 public final class com.mapconductor.tomtom.raster.TomTomStyleComposer {
   public static final com.mapconductor.tomtom.raster.TomTomStyleComposer INSTANCE;
-  public final java.lang.Object composeRasterStyle(java.lang.String, java.io.File, java.util.List<com.mapconductor.tomtom.raster.TomTomStyleComposer$RasterSpec>, java.io.File, kotlin.coroutines.Continuation<? super android.net.Uri>);
+  public final java.lang.Object composeRasterStyle(java.lang.String, java.io.File, java.util.List<com.mapconductor.tomtom.raster.TomTomStyleComposer$RasterSpec>, java.io.File, boolean, kotlin.coroutines.Continuation<? super android.net.Uri>);
 }
 public final class com.mapconductor.tomtom.raster.TomTomStyleComposer$RasterSpec {
   public final java.lang.String getId();
