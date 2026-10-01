@@ -47,6 +47,13 @@ object TomTomStyleComposer {
     /** 可視ベースに使う TomTom ラスタ地図タイル（basic/main）テンプレート（%s = API キー）。 */
     private const val BASE_RASTER_TILES = "https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=%s"
 
+    /**
+     * The browsing style's skeleton, kept so a map with no network still has
+     * the SDK layers it insists on. Private cache only: the JSON carries the
+     * API key.
+     */
+    private const val BASE_STYLE_CACHE_FILE = "tomtom_base_style.json"
+
     private const val TILE_SIZE = 256
 
     /** 合成スタイルに載せる自前ラスタレイヤー1枚分の指定。 */
@@ -79,11 +86,22 @@ object TomTomStyleComposer {
         withoutBasemap: Boolean = false,
     ): Uri? =
         withContext(Dispatchers.IO) {
+            // The SDK will not take a style that has none of its own layers
+            // (it reverts to its default), so every composed style is built
+            // on the browsing style's skeleton -- which lives on
+            // api.tomtom.com. Keeping the last copy on disk is what lets the
+            // map come up at all with no network: the skeleton is reused and
+            // only the raster layers on top, which are served from the
+            // device, are drawn.
+            val cachedBase = File(cacheDir, BASE_STYLE_CACHE_FILE)
             val baseJson =
-                fetch(String.format(BROWSING_STYLE_URL, apiKey)) ?: run {
-                    Log.e(TAG, "Failed to fetch base style JSON")
-                    return@withContext null
-                }
+                fetch(String.format(BROWSING_STYLE_URL, apiKey))
+                    ?.also { runCatching { cachedBase.writeText(it) } }
+                    ?: cachedBase.takeIf { it.isFile }?.let { runCatching { it.readText() }.getOrNull() }
+                    ?: run {
+                        Log.e(TAG, "Failed to fetch base style JSON and no cached copy")
+                        return@withContext null
+                    }
 
             val root =
                 try {
