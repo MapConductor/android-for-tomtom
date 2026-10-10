@@ -132,16 +132,23 @@ object TomTomStyleComposer {
                     when (type) {
                         "fill" -> paint.put("fill-opacity", 0)
                         "line" -> paint.put("line-opacity", 0)
-                        "symbol" -> { paint.put("text-opacity", 0); paint.put("icon-opacity", 0) }
+                        "symbol" -> {
+                            paint.put("text-opacity", 0)
+                            paint.put("icon-opacity", 0)
+                        }
                         "raster" -> paint.put("raster-opacity", 0)
                         "fill-extrusion" -> paint.put("fill-extrusion-opacity", 0)
-                        "circle" -> { paint.put("circle-opacity", 0); paint.put("circle-stroke-opacity", 0) }
+                        "circle" -> {
+                            paint.put("circle-opacity", 0)
+                            paint.put("circle-stroke-opacity", 0)
+                        }
                         "heatmap" -> paint.put("heatmap-opacity", 0)
                         "hillshade" -> paint.put("hillshade-exaggeration", 0)
                     }
                 }
             } else {
-                sources.put("mc-base-raster", rasterSource(String.format(BASE_RASTER_TILES, apiKey), TILE_SIZE, null, null))
+                sources
+                    .put("mc-base-raster", rasterSource(String.format(BASE_RASTER_TILES, apiKey), TILE_SIZE, null, null))
 
                 // 可視ベース地図（ラスタ）は最下層付近（"background" の直後）に挿入し、
                 // ラベル/オーバーレイ/マーカーがその上に来るようにする。

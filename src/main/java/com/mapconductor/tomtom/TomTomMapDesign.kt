@@ -1,11 +1,11 @@
 package com.mapconductor.tomtom
 
 import com.mapconductor.core.map.AttributionRule
+import com.mapconductor.core.map.BlankMapStyle
 import com.mapconductor.core.map.MapDesignTypeInterface
 import com.tomtom.sdk.map.display.style.StandardStyles
-import android.net.Uri
-import com.mapconductor.core.map.BlankMapStyle
 import com.tomtom.sdk.map.display.style.StyleDescriptor
+import android.net.Uri
 
 typealias TomTomMapDesignType = MapDesignTypeInterface<String>
 

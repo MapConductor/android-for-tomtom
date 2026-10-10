@@ -11,7 +11,7 @@ composeBom = "2025.02.00"
 lifecycleRuntimeKtx = "2.8.7"
 # TomTom Orbis Maps Display SDK
 # 参照: https://developer.tomtom.com/android/maps/documentation
-tomtomMaps = "2.4.1"
+tomtomMaps = "2.6.2"
 activityCompose = "1.9.3"
 ktLint = "14.2.0"
 
