@@ -364,6 +364,23 @@ class TomTomMapViewController internal constructor(
         applyPublicRasterLayer(state)
     }
 
+    /**
+     * content の外から載せるラスタ（マーカータイル、ベクタースタイルのラスタ化）。
+     *
+     * 他プロバイダは [com.mapconductor.core.raster.RasterLayerController] を
+     * オーバーレイコントローラとして登録してあるので基底の実装で足りるが、
+     * TomTom はラスタを自前の合成スタイルへ畳み込むのでそれが無い。
+     * **`publicRasterLayerIds` に入れないこと** — 入れると次の composition が
+     * 「アプリが宣言していないレイヤ」として掃除してしまう。
+     */
+    override fun mountRasterLayer(state: RasterLayerState) {
+        mainCoroutine.launch { applyPublicRasterLayer(state) }
+    }
+
+    override fun unmountRasterLayer(id: String) {
+        mainCoroutine.launch { removeRasterLayer(id) }
+    }
+
     override fun hasRasterLayer(state: RasterLayerState): Boolean = composedRasterLayers.containsKey(state.id)
 
     override suspend fun upsertRasterLayer(
