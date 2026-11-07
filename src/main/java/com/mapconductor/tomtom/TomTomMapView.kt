@@ -157,7 +157,6 @@ fun TomTomMapView(
                 }
                 mapController.setMapClickListener(onMapClick)
                 mapController.setMapLongClickListener(onMapLongClick)
-                mapController.setMapDesignTypeChangeListener(state::onMapDesignTypeChange)
                 cameraRestriction?.let { mapController.setCameraRestriction(it) }
                 // 大量マーカーをラスタタイル化するため、マーカータイル用ラスタレイヤーの
                 // 実体化（スタイル合成 + loadStyle）を配線する。
@@ -165,6 +164,17 @@ fun TomTomMapView(
                     apiKey = tomtomApiKey(context),
                     cacheDir = context.cacheDir,
                 )
+                // 地図は MapOptions の既定スタイル（= Standard）で作られる。state のデザインが
+                // それ以外なら載せる。そのあとでリスナーを繋ぐ: 先に繋ぐとコントローラの既定値
+                // （Standard）が state へ返り、アプリが渡した（あるいは回転後に復元した）
+                // デザインが Standard に化ける。
+                val initialDesign = state.mapDesignType
+                if (initialDesign === TomTomMapDesign.Standard) {
+                    mapController.mapDesignType = initialDesign
+                } else {
+                    mapController.setMapDesignType(initialDesign)
+                }
+                mapController.setMapDesignTypeChangeListener(state::onMapDesignTypeChange)
                 holder.mapView.post {
                     // Style loading can reset the camera, so reapply it once the view is attached.
                     mapController.moveCamera(initialCameraPosition)
