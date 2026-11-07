@@ -1,5 +1,7 @@
 package com.mapconductor.tomtom
 
+import com.mapconductor.core.polygon.POLYGON_TILE_LAYER_ID
+import com.mapconductor.core.polygon.PolygonTiler
 import com.mapconductor.core.raster.RasterLayerSource
 import com.mapconductor.core.raster.RasterLayerState
 import com.mapconductor.tomtom.marker.MarkerTileRasterLayerCallback
@@ -46,6 +48,18 @@ fun TomTomMapViewController.setupMarkerTileRaster(
             upsertRasterLayer(TomTomMapViewController.MARKER_RASTER_ID, src.template, 1.0)
         },
     )
+    // Many polygons are drawn as raster tiles, composed into the style like the marker tiles.
+    // Not a public layer, so the app's RasterLayer composition never removes it.
+    polygonController.tiler =
+        PolygonTiler().apply {
+            onTemplate = { template, tileSize ->
+                if (template != null) {
+                    upsertRasterLayer(POLYGON_TILE_LAYER_ID, template, 1.0, tileSize, null, null)
+                } else {
+                    removeRasterLayer(POLYGON_TILE_LAYER_ID)
+                }
+            }
+        }
 }
 
 internal suspend fun TomTomMapViewController.applyPublicRasterLayer(state: RasterLayerState) {
@@ -98,7 +112,8 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
         TomTomStyleComposer.composeRasterStyle(
             apiKey = apiKey,
             cacheDir = cacheDir,
-            layers = composedRasterLayers.values.toList(),
+            // The app's layers, then the polygon tiles, then the marker tiles on top.
+            layers = composedRasterLayers.values.sortedBy { rasterOrder(it.id) },
             outFile = outFile,
             withoutBasemap = withoutBasemap,
         ) ?: return
@@ -139,4 +154,12 @@ internal fun TomTomMapViewController.styleLoadingCallback(tag: String) =
         override fun onFailure(failure: LoadingStyleFailure) {
             android.util.Log.e("TomTomRaster", "loadStyle failed ($tag): $failure")
         }
+    }
+
+/** Where a composed raster layer goes: imagery under polygons, polygons under markers. */
+private fun rasterOrder(id: String): Int =
+    when (id) {
+        TomTomMapViewController.MARKER_RASTER_ID -> 2
+        POLYGON_TILE_LAYER_ID -> 1
+        else -> 0
     }
