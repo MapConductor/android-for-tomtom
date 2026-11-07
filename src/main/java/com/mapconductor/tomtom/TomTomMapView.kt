@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.mapconductor.compose.map.MapViewBase
@@ -38,6 +39,7 @@ import com.mapconductor.tomtom.polyline.TomTomPolylineController
 import com.mapconductor.tomtom.polyline.TomTomPolylineOverlayRenderer
 import com.tomtom.sdk.map.display.MapOptions
 import com.tomtom.sdk.map.display.ui.MapView
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -87,6 +89,21 @@ fun TomTomMapView(
             MapView(context, options).apply { onCreate(null) }
         }
 
+    // 破棄は 1 回だけ。observer が進めた分（onResume / onStart）を巻き戻してから onDestroy。
+    // 設定変更では Activity 側で onPause / onStop が済んでいるので onDestroy だけになる。
+    val releaseMapView =
+        remember(mapView) {
+            val released = AtomicBoolean(false)
+
+            fun() {
+                if (!released.compareAndSet(false, true)) return
+                val current = lifecycle.currentState
+                if (current.isAtLeast(Lifecycle.State.RESUMED)) mapView.onPause()
+                if (current.isAtLeast(Lifecycle.State.STARTED)) mapView.onStop()
+                mapView.onDestroy()
+            }
+        }
+
     // MapView のライフサイクルをホスト Activity のライフサイクルに同期させる。
     // observer 追加時に現在の状態（STARTED/RESUMED）まで catch-up されるため、
     // この時点で MapView に onStart/onResume が届く（これがタイル描画に必須）。
@@ -112,7 +129,9 @@ fun TomTomMapView(
         lifecycle.addObserver(observer)
         onDispose {
             lifecycle.removeObserver(observer)
-            mapView.onDestroy()
+            // MapViewBase normally released it already (after the controller);
+            // this covers a map that left before MapViewBase took the view.
+            releaseMapView()
         }
     }
 
@@ -185,6 +204,7 @@ fun TomTomMapView(
         scope = scope,
         registry = registry,
         onMapLoaded = onMapLoaded,
+        onDestroyMapView = { releaseMapView() },
         customDisposableEffect = { _, _ ->
             // MapView のライフサイクルは上の本体 DisposableEffect で駆動済み。
             // ここではコンポジション破棄時にコントローラを破棄してリークを防ぐ。
