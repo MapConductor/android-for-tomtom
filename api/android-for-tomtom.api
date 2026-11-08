@@ -69,6 +69,10 @@ public final class com.mapconductor.tomtom.TomTomMapViewController extends com.m
   public void destroy();
   public java.lang.Object clearOverlays(kotlin.coroutines.Continuation<? super kotlin.Unit>);
   public void setMarkerAnimationOverlayHost(com.mapconductor.core.marker.MarkerAnimationOverlayHost);
+  public java.lang.Object compositionGroundImages(java.util.List<com.mapconductor.core.groundimage.GroundImageState>, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+  public java.lang.Object compositionPolygons(java.util.List<com.mapconductor.core.polygon.PolygonState>, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+  public java.lang.Object compositionCircles(java.util.List<com.mapconductor.core.circle.CircleState>, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+  public java.lang.Object compositionPolylines(java.util.List<com.mapconductor.core.polyline.PolylineState>, kotlin.coroutines.Continuation<? super kotlin.Unit>);
   public boolean hasPolyline(com.mapconductor.core.polyline.PolylineState);
   public void setOnPolylineClickListener(kotlin.jvm.functions.Function1<? super com.mapconductor.core.polyline.PolylineEvent, kotlin.Unit>);
   public boolean hasPolygon(com.mapconductor.core.polygon.PolygonState);

@@ -85,6 +85,35 @@ object TomTomStyleComposer {
         // [TomTomMapDesign.None]: ベースマップを描かない（本文のコメント参照）。
         withoutBasemap: Boolean = false,
     ): Uri? =
+        composeStackedRasterStyle(
+            apiKey = apiKey,
+            cacheDir = cacheDir,
+            belowOverlays = emptyList(),
+            aboveOverlays = layers,
+            outFile = outFile,
+            withoutBasemap = withoutBasemap,
+        )
+
+    /**
+     * [composeRasterStyle] の、重なり順を指定できる版。
+     *
+     * - [belowOverlays]: アプリのラスター（RasterLayerState）。重なり順の決まり
+     *   （ラスター < GroundImage < ポリゴン < サークル < ポリライン < マーカー）でいちばん下の帯なので、
+     *   SDK のオーバーレイ用レイヤー（polygon-shape など）とベースマップのラベルより**下**へ、
+     *   渡された順（下→上）に入れる。
+     * - [aboveOverlays]: マーカーのタイル。マーカーの帯なのでスタイルの末尾（最前面）へ。
+     *
+     * 以前はどちらも末尾に積んでいたため、アプリのラスターがポリゴン・ポリライン・
+     * GroundImage（いずれも SDK のオーバーレイ）を覆っていた。
+     */
+    internal suspend fun composeStackedRasterStyle(
+        apiKey: String,
+        cacheDir: File,
+        belowOverlays: List<RasterSpec>,
+        aboveOverlays: List<RasterSpec>,
+        outFile: File,
+        withoutBasemap: Boolean,
+    ): Uri? =
         withContext(Dispatchers.IO) {
             // The SDK will not take a style that has none of its own layers
             // (it reverts to its default), so every composed style is built
@@ -164,8 +193,17 @@ object TomTomStyleComposer {
                 insertLayerAt(styleLayers, insertAt, baseLayer)
             }
 
-            // 自前ラスタレイヤー（マーカータイル / GroundImage など）を最前面（末尾）へ順に重ねる。
-            layers.forEachIndexed { index, spec ->
+            // アプリのラスター: SDK のオーバーレイ用レイヤーとラベルの下へ、渡された順に。
+            var insertBelow = overlayOrLabelIndex(styleLayers)
+            belowOverlays.forEachIndexed { index, spec ->
+                val sourceId = "mc-raster-src-$index"
+                sources.put(sourceId, rasterSource(spec.tilesUrl, spec.tileSize, spec.minZoom, spec.maxZoom))
+                insertLayerAt(styleLayers, insertBelow, rasterLayer("mc-raster-layer-$index", sourceId, spec.opacity))
+                insertBelow++
+            }
+            // マーカーのタイル: 最前面（末尾）へ順に重ねる。
+            aboveOverlays.forEachIndexed { i, spec ->
+                val index = belowOverlays.size + i
                 val sourceId = "mc-raster-src-$index"
                 sources.put(sourceId, rasterSource(spec.tilesUrl, spec.tileSize, spec.minZoom, spec.maxZoom))
                 styleLayers.put(rasterLayer("mc-raster-layer-$index", sourceId, spec.opacity))
@@ -179,7 +217,8 @@ object TomTomStyleComposer {
             }
             Log.i(
                 TAG,
-                "Composed style written (${outFile.length()} bytes, ${styleLayers.length()} layers, ${layers.size} raster)",
+                "Composed style written (${outFile.length()} bytes, ${styleLayers.length()} layers, " +
+                    "${belowOverlays.size + aboveOverlays.size} raster)",
             )
             Uri.fromFile(outFile)
         }
@@ -229,6 +268,22 @@ object TomTomStyleComposer {
             put("source", source)
             put("paint", JSONObject().put("raster-opacity", opacity))
         }
+
+    /**
+     * アプリのラスターを入れる位置: ベースマップのラベル（symbol）か SDK のオーバーレイ用レイヤー
+     * （polygon-shape / polyline-shape / circle-shape / marker / route など）のうち最初のもの。
+     * どちらも無ければ末尾。
+     */
+    private fun overlayOrLabelIndex(layers: JSONArray): Int {
+        for (i in 0 until layers.length()) {
+            val layer = layers.optJSONObject(i) ?: continue
+            val id = layer.optString("id")
+            if (layer.optString("type") == "symbol" || SDK_OVERLAY_LAYER_HINTS.any { id.contains(it) }) return i
+        }
+        return layers.length()
+    }
+
+    private val SDK_OVERLAY_LAYER_HINTS = listOf("shape", "marker", "route")
 
     /** JSONArray への位置指定挿入（org.json は insert が無いため末尾に足してからシフト）。 */
     private fun insertLayerAt(
