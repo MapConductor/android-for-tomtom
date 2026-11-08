@@ -3,7 +3,7 @@ package com.mapconductor.tomtom.polygon
 import androidx.compose.ui.graphics.toArgb
 import com.mapconductor.core.features.GeoPoint
 import com.mapconductor.core.features.GeoPointInterface
-import com.mapconductor.core.geometry.densifyGeodesicRing
+import com.mapconductor.core.geometry.densifyPolygonRing
 import com.mapconductor.core.polygon.AbstractPolygonOverlayRenderer
 import com.mapconductor.core.polygon.PolygonEntityInterface
 import com.mapconductor.core.polygon.PolygonState
@@ -42,14 +42,7 @@ class TomTomPolygonOverlayRenderer(
         points: List<GeoPointInterface>,
         geodesic: Boolean,
     ): List<TomTomGeoPoint> {
-        // 非 geodesic は補間せず生の頂点を使う（HERE と同じ）。geodesic のみ補間する。
-        // geodesic は閉じる辺（末尾 → 先頭）も大圏で補間する（塗りと輪郭が同じネイティブポリゴン）。
-        val geoPoints =
-            if (geodesic) {
-                densifyGeodesicRing(points, maxSegmentLength = maxSegmentLengthMeters())
-            } else {
-                points
-            }
+        val geoPoints = densify(points, geodesic)
         var ring = geoPoints.map { GeoPoint.from(it).toTomTomGeoPoint() }
         // 末尾の重複始点を除く（開いたリング）。
         if (ring.size >= 2 && ring.first() == ring.last()) {
@@ -79,15 +72,27 @@ class TomTomPolygonOverlayRenderer(
         points: List<GeoPointInterface>,
         geodesic: Boolean,
     ): List<GeoPointInterface> {
-        val geoPoints =
-            if (geodesic) {
-                densifyGeodesicRing(points, maxSegmentLength = maxSegmentLengthMeters())
-            } else {
-                points
-            }
-        val ring = geoPoints.map { GeoPoint.from(it) }
+        val ring = densify(points, geodesic).map { GeoPoint.from(it) }
         return if (ring.size >= 2 && ring.first() == ring.last()) ring.dropLast(1) else ring
     }
+
+    /**
+     * 閉じる辺（末尾 → 先頭）も含めてリングを密度化する（塗りと輪郭が同じネイティブポリゴン）。
+     * geodesic は大圏、geodesic=false は緯度経度の線形補間（ポリラインの false と同じ線）。
+     *
+     * 線形補間は [MAX_GEODESIC_SEGMENT_METERS] 刻みと粗くする。世界マスク級のリングを 10 km 刻みで
+     * 補間すると過密になり TomTom の描画が失敗する（以前はこのため false を補間していなかった）。
+     * 緯度経度の直線は 200 km 刻みでもメルカトル上の曲がりを十分に表せる。
+     */
+    private fun densify(
+        points: List<GeoPointInterface>,
+        geodesic: Boolean,
+    ): List<GeoPointInterface> =
+        densifyPolygonRing(
+            points,
+            geodesic,
+            maxSegmentLength = if (geodesic) maxSegmentLengthMeters() else MAX_GEODESIC_SEGMENT_METERS,
+        )
 
     private fun maxSegmentLengthMeters(): Double {
         val zoom = holder.map.cameraPosition.zoom
