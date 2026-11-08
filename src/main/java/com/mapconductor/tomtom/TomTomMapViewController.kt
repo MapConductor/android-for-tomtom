@@ -218,6 +218,8 @@ class TomTomMapViewController internal constructor(
         val rasterIds = publicRasterLayerIds.toList()
         publicRasterLayerIds.clear()
         rasterIds.forEach { removeRasterLayer(it) }
+        // 拡張モジュール（クラスタリングなど）が登録した Strategy のマーカーも消す。
+        clearStrategyMarkerControllers()
     }
 
     override fun setMarkerAnimationOverlayHost(host: MarkerAnimationOverlayHost?) {
