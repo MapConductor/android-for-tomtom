@@ -38,10 +38,13 @@ class TomTomMapViewState(
             this.controller?.setMapDesignType(value)
         }
         get() = _mapDesignType
-    private var controller: TomTomMapViewControllerInterface? = null
+
+    // Read through the base so that letting go of the controller there (MapViewBase
+    // does it when the map is torn down) leaves nothing behind here.
+    private val controller: TomTomMapViewControllerInterface?
+        get() = attachedMapController as? TomTomMapViewControllerInterface
 
     internal fun setController(controller: TomTomMapViewControllerInterface) {
-        this.controller = controller
         attachController(controller)
     }
 
