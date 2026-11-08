@@ -211,6 +211,13 @@ class TomTomMapViewController internal constructor(
         polylineController.clear()
         polygonController.clear()
         circleController.clear()
+        groundImageController.clear()
+        // TomTom には RasterLayerController が無い（ラスタは合成スタイルへ畳み込む）ので、
+        // 他プロバイダの rasterLayerController.clear() に当たるものをここで行う。消すのは
+        // 公開 RasterLayer 経由のものだけ。マーカータイル等の mount 分は持ち主が外す。
+        val rasterIds = publicRasterLayerIds.toList()
+        publicRasterLayerIds.clear()
+        rasterIds.forEach { removeRasterLayer(it) }
     }
 
     override fun setMarkerAnimationOverlayHost(host: MarkerAnimationOverlayHost?) {
