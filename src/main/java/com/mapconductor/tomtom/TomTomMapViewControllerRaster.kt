@@ -54,6 +54,8 @@ internal suspend fun TomTomMapViewController.applyPublicRasterLayer(state: Raste
         removeRasterLayer(state.id)
         return
     }
+    // 帯の中の順（zIndex、同じなら渡された順）。合成のときに並べる。
+    composedRasterZIndex[state.id] = state.zIndex
     // ソースの tileSize / minZoom / maxZoom を合成スタイルへ伝える。maxZoom を渡すと
     // 高ズームでオーバーズーム表示され、実タイルの無い領域での歯抜けを防げる。
     upsertRasterLayer(
@@ -94,11 +96,15 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
     }
     composedStyleToggle = composedStyleToggle xor 1
     val outFile = File(cacheDir, "tomtom_composed_style_$composedStyleToggle.json")
+    // アプリのラスターはラスターの帯（SDK のオーバーレイの下）、マーカーのタイルはマーカーの帯（最前面）。
+    val (markerTiles, appRasters) =
+        composedRasterLayers.values.partition { it.id == TomTomMapViewController.MARKER_RASTER_ID }
     val uri =
-        TomTomStyleComposer.composeRasterStyle(
+        TomTomStyleComposer.composeStackedRasterStyle(
             apiKey = apiKey,
             cacheDir = cacheDir,
-            layers = composedRasterLayers.values.toList(),
+            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 },
+            aboveOverlays = markerTiles,
             outFile = outFile,
             withoutBasemap = withoutBasemap,
         ) ?: return
