@@ -3,13 +3,13 @@ package com.mapconductor.tomtom.polygon
 import androidx.compose.ui.graphics.toArgb
 import com.mapconductor.core.features.GeoPoint
 import com.mapconductor.core.features.GeoPointInterface
+import com.mapconductor.core.geometry.densifyGeodesicRing
 import com.mapconductor.core.polygon.AbstractPolygonOverlayRenderer
 import com.mapconductor.core.polygon.PolygonEntityInterface
 import com.mapconductor.core.polygon.PolygonState
 import com.mapconductor.core.polygon.bridgeHolesIntoSingleRing
 import com.mapconductor.core.polygon.unionHoles
 import com.mapconductor.core.projection.Earth
-import com.mapconductor.core.spherical.WGS84Geodesic
 import com.mapconductor.tomtom.TomTomActualPolygon
 import com.mapconductor.tomtom.TomTomMapViewHolder
 import com.mapconductor.tomtom.toTomTomGeoPoint
@@ -43,9 +43,10 @@ class TomTomPolygonOverlayRenderer(
         geodesic: Boolean,
     ): List<TomTomGeoPoint> {
         // 非 geodesic は補間せず生の頂点を使う（HERE と同じ）。geodesic のみ補間する。
+        // geodesic は閉じる辺（末尾 → 先頭）も大圏で補間する（塗りと輪郭が同じネイティブポリゴン）。
         val geoPoints =
             if (geodesic) {
-                WGS84Geodesic.createInterpolatePoints(points, maxSegmentLength = maxSegmentLengthMeters())
+                densifyGeodesicRing(points, maxSegmentLength = maxSegmentLengthMeters())
             } else {
                 points
             }
@@ -80,7 +81,7 @@ class TomTomPolygonOverlayRenderer(
     ): List<GeoPointInterface> {
         val geoPoints =
             if (geodesic) {
-                WGS84Geodesic.createInterpolatePoints(points, maxSegmentLength = maxSegmentLengthMeters())
+                densifyGeodesicRing(points, maxSegmentLength = maxSegmentLengthMeters())
             } else {
                 points
             }
