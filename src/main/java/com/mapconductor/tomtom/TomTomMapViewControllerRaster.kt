@@ -123,25 +123,25 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
     }
     composedStyleToggle = composedStyleToggle xor 1
     val outFile = File(cacheDir, "tomtom_composed_style_$composedStyleToggle.json")
-    // アプリのラスターはラスターの帯（SDK のオーバーレイの下）、マーカーのタイルはマーカーの帯（最前面）。
-    // ポリゴンのタイルはアプリのラスターのすぐ上（SDK のオーバーレイの下）。ポリゴンの帯は
-    // GroundImage の上だが、TomTom の GroundImage はネイティブの Polygon（SDK のオーバーレイ）で、
-    // スタイルの層をその間へは入れられない。サークル・ポリライン・マーカーの下は守れる。
-    // ポリラインのタイルはポリゴンのタイルの上（同じ理由で SDK のオーバーレイの下: ネイティブの
-    // ポリゴン・サークルもこのタイルの上に来る）。マーカーのタイルとマーカーの下は守れる。
+    // アプリのラスターはラスターの帯（ベースマップのラベルの下）、マーカーのタイルはマーカーの帯（最前面）。
+    // ポリゴンのタイルはアプリのラスターのすぐ上（ラベルの下）。ネイティブのサークル・ポリゴン
+    // （SDK のオーバーレイ）はその上に来る。ポリラインのタイルはベースマップの全レイヤー（道路・ラベル）の
+    // 上: TomTom のスタイルは最初のラベルの後ろにも道路の line が続くので、ラベルの前では道路のタイルが
+    // 地図の道路に覆われて見えなかった。ネイティブのサークルより上・マーカー（とそのタイル）より下になる
+    // （実機で確認。ポリゴンのタイルまで上へ上げるとサークルを覆ってしまう）。
     val (markerTiles, others) =
         composedRasterLayers.values.partition { it.id == TomTomMapViewController.MARKER_RASTER_ID }
-    val (shapeTiles, appRasters) = others.partition { it.id == POLYGON_TILE_LAYER_ID || it.id == POLYLINE_TILE_LAYER_ID }
-    // Polygon tiles first (lower), then polyline tiles.
-    val shapeTilesBottomUp = shapeTiles.sortedBy { if (it.id == POLYGON_TILE_LAYER_ID) 0 else 1 }
+    val (polylineTiles, rest) = others.partition { it.id == POLYLINE_TILE_LAYER_ID }
+    val (polygonTiles, appRasters) = rest.partition { it.id == POLYGON_TILE_LAYER_ID }
     val uri =
         TomTomStyleComposer.composeStackedRasterStyle(
             apiKey = apiKey,
             cacheDir = cacheDir,
-            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 } + shapeTilesBottomUp,
+            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 } + polygonTiles,
             aboveOverlays = markerTiles,
             outFile = outFile,
             withoutBasemap = withoutBasemap,
+            polylineTiles = polylineTiles,
         ) ?: return
     if (destroyed) return
     withContext(Dispatchers.Main) {

@@ -101,6 +101,9 @@ object TomTomStyleComposer {
      *   （ラスター < GroundImage < ポリゴン < サークル < ポリライン < マーカー）でいちばん下の帯なので、
      *   SDK のオーバーレイ用レイヤー（polygon-shape など）とベースマップのラベルより**下**へ、
      *   渡された順（下→上）に入れる。
+     * - [polylineTiles]: SDK 自身のポリラインのタイル（下→上）。スタイルの全レイヤー（ベースマップの
+     *   道路・ラベルも含む）の上、マーカーのタイルの下へ。TomTom のスタイルは最初の symbol の後ろにも
+     *   道路の line レイヤーが続くので、ラベルの前に入れると道路のタイルが地図の道路に覆われて見えなかった。
      * - [aboveOverlays]: マーカーのタイル。マーカーの帯なのでスタイルの末尾（最前面）へ。
      *
      * 以前はどちらも末尾に積んでいたため、アプリのラスターがポリゴン・ポリライン・
@@ -113,6 +116,7 @@ object TomTomStyleComposer {
         aboveOverlays: List<RasterSpec>,
         outFile: File,
         withoutBasemap: Boolean,
+        polylineTiles: List<RasterSpec> = emptyList(),
     ): Uri? =
         withContext(Dispatchers.IO) {
             // The SDK will not take a style that has none of its own layers
@@ -201,9 +205,16 @@ object TomTomStyleComposer {
                 insertLayerAt(styleLayers, insertBelow, rasterLayer("mc-raster-layer-$index", sourceId, spec.opacity))
                 insertBelow++
             }
+            // ポリラインのタイル: ベースマップの全レイヤーの上へ順に。
+            polylineTiles.forEachIndexed { i, spec ->
+                val index = belowOverlays.size + i
+                val sourceId = "mc-raster-src-$index"
+                sources.put(sourceId, rasterSource(spec.tilesUrl, spec.tileSize, spec.minZoom, spec.maxZoom))
+                styleLayers.put(rasterLayer("mc-raster-layer-$index", sourceId, spec.opacity))
+            }
             // マーカーのタイル: 最前面（末尾）へ順に重ねる。
             aboveOverlays.forEachIndexed { i, spec ->
-                val index = belowOverlays.size + i
+                val index = belowOverlays.size + polylineTiles.size + i
                 val sourceId = "mc-raster-src-$index"
                 sources.put(sourceId, rasterSource(spec.tilesUrl, spec.tileSize, spec.minZoom, spec.maxZoom))
                 styleLayers.put(rasterLayer("mc-raster-layer-$index", sourceId, spec.opacity))
@@ -218,7 +229,7 @@ object TomTomStyleComposer {
             Log.i(
                 TAG,
                 "Composed style written (${outFile.length()} bytes, ${styleLayers.length()} layers, " +
-                    "${belowOverlays.size + aboveOverlays.size} raster)",
+                    "${belowOverlays.size + polylineTiles.size + aboveOverlays.size} raster)",
             )
             Uri.fromFile(outFile)
         }
