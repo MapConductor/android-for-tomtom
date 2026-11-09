@@ -1,5 +1,7 @@
 package com.mapconductor.tomtom
 
+import com.mapconductor.core.polygon.POLYGON_TILE_LAYER_ID
+import com.mapconductor.core.polygon.PolygonTiler
 import com.mapconductor.core.raster.RasterLayerSource
 import com.mapconductor.core.raster.RasterLayerState
 import com.mapconductor.tomtom.marker.MarkerTileRasterLayerCallback
@@ -46,6 +48,18 @@ fun TomTomMapViewController.setupMarkerTileRaster(
             upsertRasterLayer(TomTomMapViewController.MARKER_RASTER_ID, src.template, 1.0)
         },
     )
+    // Many polygons are drawn as raster tiles, composed into the style like the marker tiles.
+    // Not a public layer, so the app's RasterLayer composition never removes it.
+    polygonController.tiler =
+        PolygonTiler().apply {
+            onTemplate = { template, tileSize ->
+                if (template != null) {
+                    upsertRasterLayer(POLYGON_TILE_LAYER_ID, template, 1.0, tileSize, null, null)
+                } else {
+                    removeRasterLayer(POLYGON_TILE_LAYER_ID)
+                }
+            }
+        }
 }
 
 internal suspend fun TomTomMapViewController.applyPublicRasterLayer(state: RasterLayerState) {
@@ -97,13 +111,17 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
     composedStyleToggle = composedStyleToggle xor 1
     val outFile = File(cacheDir, "tomtom_composed_style_$composedStyleToggle.json")
     // アプリのラスターはラスターの帯（SDK のオーバーレイの下）、マーカーのタイルはマーカーの帯（最前面）。
-    val (markerTiles, appRasters) =
+    // ポリゴンのタイルはアプリのラスターのすぐ上（SDK のオーバーレイの下）。ポリゴンの帯は
+    // GroundImage の上だが、TomTom の GroundImage はネイティブの Polygon（SDK のオーバーレイ）で、
+    // スタイルの層をその間へは入れられない。サークル・ポリライン・マーカーの下は守れる。
+    val (markerTiles, others) =
         composedRasterLayers.values.partition { it.id == TomTomMapViewController.MARKER_RASTER_ID }
+    val (polygonTiles, appRasters) = others.partition { it.id == POLYGON_TILE_LAYER_ID }
     val uri =
         TomTomStyleComposer.composeStackedRasterStyle(
             apiKey = apiKey,
             cacheDir = cacheDir,
-            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 },
+            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 } + polygonTiles,
             aboveOverlays = markerTiles,
             outFile = outFile,
             withoutBasemap = withoutBasemap,
@@ -146,3 +164,4 @@ internal fun TomTomMapViewController.styleLoadingCallback(tag: String) =
             android.util.Log.e("TomTomRaster", "loadStyle failed ($tag): $failure")
         }
     }
+
