@@ -211,10 +211,83 @@ class TomTomMapViewController internal constructor(
         polylineController.clear()
         polygonController.clear()
         circleController.clear()
+        groundImageController.clear()
+        // TomTom には RasterLayerController が無い（ラスタは合成スタイルへ畳み込む）ので、
+        // 他プロバイダの rasterLayerController.clear() に当たるものをここで行う。消すのは
+        // 公開 RasterLayer 経由のものだけ。マーカータイル等の mount 分は持ち主が外す。
+        val rasterIds = publicRasterLayerIds.toList()
+        publicRasterLayerIds.clear()
+        rasterIds.forEach { removeRasterLayer(it) }
+        // 拡張モジュール（クラスタリングなど）が登録した Strategy のマーカーも消す。
+        clearStrategyMarkerControllers()
     }
 
     override fun setMarkerAnimationOverlayHost(host: MarkerAnimationOverlayHost?) {
         (markerController.renderer as TomTomMarkerRenderer).animationOverlayHost = host
+    }
+
+    // ---- 重なり順 ----------------------------------------------------------
+    //
+    // TomTom のネイティブの Polygon / Polyline には重なり順の指定が無く、後から足したものが
+    // 上に積まれる。GroundImage・ポリゴン・サークルの塗りはどれもネイティブの Polygon、
+    // サークルの輪郭とポリラインはネイティブの Polyline なので、そのままだと
+    // 「追加した順」で重なる（clearOverlays の後に送り直すと順が変わる）。
+    // 帯の順（GroundImage < ポリゴン < サークル < ポリライン）を守るため、下の帯へ
+    // 新しく足されたら、それより上の帯を足し直す。帯の中は zIndex の順（同じなら渡された順）。
+
+    override suspend fun compositionGroundImages(data: List<GroundImageState>) {
+        val added = data.any { !groundImageController.groundImageManager.hasEntity(it.id) }
+        groundImageController.add(data)
+        if (added) {
+            restackPolygons()
+            restackCircles()
+        }
+    }
+
+    override suspend fun compositionPolygons(data: List<PolygonState>) {
+        val added = data.any { !polygonController.polygonManager.hasEntity(it.id) }
+        polygonController.add(data.sortedBy { it.zIndex })
+        if (added) {
+            restackPolygons()
+            restackCircles()
+        }
+    }
+
+    override suspend fun compositionCircles(data: List<CircleState>) {
+        val added = data.any { !circleController.circleManager.hasEntity(it.id) }
+        circleController.add(data.sortedBy { it.zIndex ?: 0 })
+        if (added) {
+            restackCircles()
+            restackPolylines()
+        }
+    }
+
+    override suspend fun compositionPolylines(data: List<PolylineState>) {
+        val added = data.any { !polylineController.polylineManager.hasEntity(it.id) }
+        polylineController.add(data.sortedBy { it.zIndex })
+        if (added) restackPolylines()
+    }
+
+    /** いったん消して zIndex の順に足し直す（ネイティブの積み順を作り直す）。 */
+    private suspend fun restackPolygons() {
+        val states = polygonController.polygonManager.allEntities().map { it.state }
+        if (states.isEmpty()) return
+        polygonController.clear()
+        polygonController.add(states.sortedBy { it.zIndex })
+    }
+
+    private suspend fun restackCircles() {
+        val states = circleController.circleManager.allEntities().map { it.state }
+        if (states.isEmpty()) return
+        circleController.clear()
+        circleController.add(states.sortedBy { it.zIndex ?: 0 })
+    }
+
+    private suspend fun restackPolylines() {
+        val states = polylineController.polylineManager.allEntities().map { it.state }
+        if (states.isEmpty()) return
+        polylineController.clear()
+        polylineController.add(states.sortedBy { it.zIndex })
     }
 
     // ---- Polyline / Polygon / Circle capable ------------------------------
@@ -338,6 +411,9 @@ class TomTomMapViewController internal constructor(
     // 注意: 合成は現状 browsing/light ベース固定。Standard 以外のデザインでラスタを載せた場合は
     // ベースが browsing になる（対象ページは Standard のため実用上問題なし）。
     internal val composedRasterLayers = LinkedHashMap<String, TomTomStyleComposer.RasterSpec>()
+
+    /** アプリのラスターの zIndex（帯の中の順）。[composedRasterLayers] と同じキー。 */
+    internal val composedRasterZIndex = java.util.concurrent.ConcurrentHashMap<String, Int>()
     internal val composedStyleMutex = Mutex()
     internal var rasterApiKey: String? = null
     internal var rasterCacheDir: File? = null
@@ -399,6 +475,7 @@ class TomTomMapViewController internal constructor(
     }
 
     override suspend fun removeRasterLayer(id: String) {
+        composedRasterZIndex.remove(id)
         val removed = composedStyleMutex.withLock { composedRasterLayers.remove(id) != null }
         if (!removed) return
         scheduleComposedStyleReload()

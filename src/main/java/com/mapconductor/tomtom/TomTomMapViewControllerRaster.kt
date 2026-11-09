@@ -68,6 +68,8 @@ internal suspend fun TomTomMapViewController.applyPublicRasterLayer(state: Raste
         removeRasterLayer(state.id)
         return
     }
+    // 帯の中の順（zIndex、同じなら渡された順）。合成のときに並べる。
+    composedRasterZIndex[state.id] = state.zIndex
     // ソースの tileSize / minZoom / maxZoom を合成スタイルへ伝える。maxZoom を渡すと
     // 高ズームでオーバーズーム表示され、実タイルの無い領域での歯抜けを防げる。
     upsertRasterLayer(
@@ -108,12 +110,19 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
     }
     composedStyleToggle = composedStyleToggle xor 1
     val outFile = File(cacheDir, "tomtom_composed_style_$composedStyleToggle.json")
+    // アプリのラスターはラスターの帯（SDK のオーバーレイの下）、マーカーのタイルはマーカーの帯（最前面）。
+    // ポリゴンのタイルはアプリのラスターのすぐ上（SDK のオーバーレイの下）。ポリゴンの帯は
+    // GroundImage の上だが、TomTom の GroundImage はネイティブの Polygon（SDK のオーバーレイ）で、
+    // スタイルの層をその間へは入れられない。サークル・ポリライン・マーカーの下は守れる。
+    val (markerTiles, others) =
+        composedRasterLayers.values.partition { it.id == TomTomMapViewController.MARKER_RASTER_ID }
+    val (polygonTiles, appRasters) = others.partition { it.id == POLYGON_TILE_LAYER_ID }
     val uri =
-        TomTomStyleComposer.composeRasterStyle(
+        TomTomStyleComposer.composeStackedRasterStyle(
             apiKey = apiKey,
             cacheDir = cacheDir,
-            // The app's layers, then the polygon tiles, then the marker tiles on top.
-            layers = composedRasterLayers.values.sortedBy { rasterOrder(it.id) },
+            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 } + polygonTiles,
+            aboveOverlays = markerTiles,
             outFile = outFile,
             withoutBasemap = withoutBasemap,
         ) ?: return
@@ -156,10 +165,3 @@ internal fun TomTomMapViewController.styleLoadingCallback(tag: String) =
         }
     }
 
-/** Where a composed raster layer goes: imagery under polygons, polygons under markers. */
-private fun rasterOrder(id: String): Int =
-    when (id) {
-        TomTomMapViewController.MARKER_RASTER_ID -> 2
-        POLYGON_TILE_LAYER_ID -> 1
-        else -> 0
-    }
