@@ -2,6 +2,8 @@ package com.mapconductor.tomtom
 
 import com.mapconductor.core.polygon.POLYGON_TILE_LAYER_ID
 import com.mapconductor.core.polygon.PolygonTiler
+import com.mapconductor.core.polyline.POLYLINE_TILE_LAYER_ID
+import com.mapconductor.core.polyline.PolylineTiler
 import com.mapconductor.core.raster.RasterLayerSource
 import com.mapconductor.core.raster.RasterLayerState
 import com.mapconductor.tomtom.marker.MarkerTileRasterLayerCallback
@@ -60,6 +62,17 @@ fun TomTomMapViewController.setupMarkerTileRaster(
                 }
             }
         }
+    // Many polylines too, the same way (over the polygon tiles, under the SDK's overlays).
+    polylineController.tiler =
+        PolylineTiler().apply {
+            onTemplate = { template, tileSize ->
+                if (template != null) {
+                    upsertRasterLayer(POLYLINE_TILE_LAYER_ID, template, 1.0, tileSize, null, null)
+                } else {
+                    removeRasterLayer(POLYLINE_TILE_LAYER_ID)
+                }
+            }
+        }
 }
 
 internal suspend fun TomTomMapViewController.applyPublicRasterLayer(state: RasterLayerState) {
@@ -114,14 +127,18 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
     // ポリゴンのタイルはアプリのラスターのすぐ上（SDK のオーバーレイの下）。ポリゴンの帯は
     // GroundImage の上だが、TomTom の GroundImage はネイティブの Polygon（SDK のオーバーレイ）で、
     // スタイルの層をその間へは入れられない。サークル・ポリライン・マーカーの下は守れる。
+    // ポリラインのタイルはポリゴンのタイルの上（同じ理由で SDK のオーバーレイの下: ネイティブの
+    // ポリゴン・サークルもこのタイルの上に来る）。マーカーのタイルとマーカーの下は守れる。
     val (markerTiles, others) =
         composedRasterLayers.values.partition { it.id == TomTomMapViewController.MARKER_RASTER_ID }
-    val (polygonTiles, appRasters) = others.partition { it.id == POLYGON_TILE_LAYER_ID }
+    val (shapeTiles, appRasters) = others.partition { it.id == POLYGON_TILE_LAYER_ID || it.id == POLYLINE_TILE_LAYER_ID }
+    // Polygon tiles first (lower), then polyline tiles.
+    val shapeTilesBottomUp = shapeTiles.sortedBy { if (it.id == POLYGON_TILE_LAYER_ID) 0 else 1 }
     val uri =
         TomTomStyleComposer.composeStackedRasterStyle(
             apiKey = apiKey,
             cacheDir = cacheDir,
-            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 } + polygonTiles,
+            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 } + shapeTilesBottomUp,
             aboveOverlays = markerTiles,
             outFile = outFile,
             withoutBasemap = withoutBasemap,
