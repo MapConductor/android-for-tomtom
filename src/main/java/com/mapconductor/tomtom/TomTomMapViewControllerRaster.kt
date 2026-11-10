@@ -2,6 +2,8 @@ package com.mapconductor.tomtom
 
 import com.mapconductor.core.polygon.POLYGON_TILE_LAYER_ID
 import com.mapconductor.core.polygon.PolygonTiler
+import com.mapconductor.core.polyline.POLYLINE_TILE_LAYER_ID
+import com.mapconductor.core.polyline.PolylineTiler
 import com.mapconductor.core.raster.RasterLayerSource
 import com.mapconductor.core.raster.RasterLayerState
 import com.mapconductor.tomtom.marker.MarkerTileRasterLayerCallback
@@ -60,6 +62,17 @@ fun TomTomMapViewController.setupMarkerTileRaster(
                 }
             }
         }
+    // Many polylines too, the same way (over the polygon tiles, under the SDK's overlays).
+    polylineController.tiler =
+        PolylineTiler().apply {
+            onTemplate = { template, tileSize ->
+                if (template != null) {
+                    upsertRasterLayer(POLYLINE_TILE_LAYER_ID, template, 1.0, tileSize, null, null)
+                } else {
+                    removeRasterLayer(POLYLINE_TILE_LAYER_ID)
+                }
+            }
+        }
 }
 
 internal suspend fun TomTomMapViewController.applyPublicRasterLayer(state: RasterLayerState) {
@@ -110,13 +123,16 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
     }
     composedStyleToggle = composedStyleToggle xor 1
     val outFile = File(cacheDir, "tomtom_composed_style_$composedStyleToggle.json")
-    // アプリのラスターはラスターの帯（SDK のオーバーレイの下）、マーカーのタイルはマーカーの帯（最前面）。
-    // ポリゴンのタイルはアプリのラスターのすぐ上（SDK のオーバーレイの下）。ポリゴンの帯は
-    // GroundImage の上だが、TomTom の GroundImage はネイティブの Polygon（SDK のオーバーレイ）で、
-    // スタイルの層をその間へは入れられない。サークル・ポリライン・マーカーの下は守れる。
+    // アプリのラスターはラスターの帯（ベースマップのラベルの下）、マーカーのタイルはマーカーの帯（最前面）。
+    // ポリゴンのタイルはアプリのラスターのすぐ上（ラベルの下）。ネイティブのサークル・ポリゴン
+    // （SDK のオーバーレイ）はその上に来る。ポリラインのタイルはベースマップの全レイヤー（道路・ラベル）の
+    // 上: TomTom のスタイルは最初のラベルの後ろにも道路の line が続くので、ラベルの前では道路のタイルが
+    // 地図の道路に覆われて見えなかった。ネイティブのサークルより上・マーカー（とそのタイル）より下になる
+    // （実機で確認。ポリゴンのタイルまで上へ上げるとサークルを覆ってしまう）。
     val (markerTiles, others) =
         composedRasterLayers.values.partition { it.id == TomTomMapViewController.MARKER_RASTER_ID }
-    val (polygonTiles, appRasters) = others.partition { it.id == POLYGON_TILE_LAYER_ID }
+    val (polylineTiles, rest) = others.partition { it.id == POLYLINE_TILE_LAYER_ID }
+    val (polygonTiles, appRasters) = rest.partition { it.id == POLYGON_TILE_LAYER_ID }
     val uri =
         TomTomStyleComposer.composeStackedRasterStyle(
             apiKey = apiKey,
@@ -125,6 +141,7 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
             aboveOverlays = markerTiles,
             outFile = outFile,
             withoutBasemap = withoutBasemap,
+            polylineTiles = polylineTiles,
         ) ?: return
     if (destroyed) return
     withContext(Dispatchers.Main) {

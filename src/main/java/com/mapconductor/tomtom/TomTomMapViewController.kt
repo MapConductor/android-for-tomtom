@@ -284,6 +284,8 @@ class TomTomMapViewController internal constructor(
     }
 
     private suspend fun restackPolylines() {
+        // Drawn as tiles: the tile layer has its own order, and clearing would tile them all again.
+        if (polylineController.tiler?.tiledStates()?.isNotEmpty() == true) return
         val states = polylineController.polylineManager.allEntities().map { it.state }
         if (states.isEmpty()) return
         polylineController.clear()
