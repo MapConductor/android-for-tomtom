@@ -1,5 +1,7 @@
 package com.mapconductor.tomtom
 
+import com.mapconductor.core.circle.CIRCLE_TILE_LAYER_ID
+import com.mapconductor.core.circle.CircleTiler
 import com.mapconductor.core.polygon.POLYGON_TILE_LAYER_ID
 import com.mapconductor.core.polygon.PolygonTiler
 import com.mapconductor.core.polyline.POLYLINE_TILE_LAYER_ID
@@ -73,6 +75,16 @@ fun TomTomMapViewController.setupMarkerTileRaster(
                 }
             }
         }
+    circleController.tiler =
+        CircleTiler().apply {
+            onTemplate = { template, tileSize ->
+                if (template != null) {
+                    upsertRasterLayer(CIRCLE_TILE_LAYER_ID, template, 1.0, tileSize, null, null)
+                } else {
+                    removeRasterLayer(CIRCLE_TILE_LAYER_ID)
+                }
+            }
+        }
 }
 
 internal suspend fun TomTomMapViewController.applyPublicRasterLayer(state: RasterLayerState) {
@@ -132,12 +144,13 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
     val (markerTiles, others) =
         composedRasterLayers.values.partition { it.id == TomTomMapViewController.MARKER_RASTER_ID }
     val (polylineTiles, rest) = others.partition { it.id == POLYLINE_TILE_LAYER_ID }
-    val (polygonTiles, appRasters) = rest.partition { it.id == POLYGON_TILE_LAYER_ID }
+    val (circleTiles, remaining) = rest.partition { it.id == CIRCLE_TILE_LAYER_ID }
+    val (polygonTiles, appRasters) = remaining.partition { it.id == POLYGON_TILE_LAYER_ID }
     val uri =
         TomTomStyleComposer.composeStackedRasterStyle(
             apiKey = apiKey,
             cacheDir = cacheDir,
-            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 } + polygonTiles,
+            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 } + polygonTiles + circleTiles,
             aboveOverlays = markerTiles,
             outFile = outFile,
             withoutBasemap = withoutBasemap,
