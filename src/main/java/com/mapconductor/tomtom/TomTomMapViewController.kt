@@ -277,6 +277,9 @@ class TomTomMapViewController internal constructor(
     }
 
     private suspend fun restackCircles() {
+        // Drawn as tiles: the tile layer has its own order, and clearing would tile them all again
+        // (6 s for 700k circles on a tablet, with the tiles gone meanwhile), as for polylines.
+        if (circleController.tiler?.tiledStates()?.isNotEmpty() == true) return
         val states = circleController.circleManager.allEntities().map { it.state }
         if (states.isEmpty()) return
         circleController.clear()
