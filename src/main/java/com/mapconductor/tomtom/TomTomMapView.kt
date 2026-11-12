@@ -38,6 +38,7 @@ import com.mapconductor.tomtom.polygon.TomTomPolygonOverlayRenderer
 import com.mapconductor.tomtom.polyline.TomTomPolylineController
 import com.mapconductor.tomtom.polyline.TomTomPolylineOverlayRenderer
 import com.tomtom.sdk.map.display.MapOptions
+import com.tomtom.sdk.map.display.camera.InitialCameraOptions
 import com.tomtom.sdk.map.display.ui.MapView
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -80,9 +81,17 @@ fun TomTomMapView(
     // 描画されない（View だけ出てタイルが出ない）。tmp の動作実装と同じ構成にする。
     val mapView =
         remember {
+            // 2.7 から初期カメラが必須。ここでは同じ地点の広域表示にしておき、目的のカメラは
+            // 下の post で moveCamera する。最初から目的のカメラを渡すと moveCamera がカメラを
+            // 変えず、TextureView 描画では最初の 1 枚が描かれないまま黒くなる（2.7.2 実測）。
             val options =
                 MapOptions(
                     mapKey = tomtomApiKey(context),
+                    initialCameraOptions =
+                        InitialCameraOptions.LocationBased(
+                            position = initialCameraPosition.position.toTomTomGeoPoint(),
+                            zoom = InitialCameraOptions.MIN_ZOOM,
+                        ),
                     // Compose の SubcomposeLayout 内に埋め込むため TextureView 描画にする。
                     renderToTexture = true,
                 )
