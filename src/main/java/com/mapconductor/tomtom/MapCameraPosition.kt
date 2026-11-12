@@ -70,6 +70,12 @@ fun MapCameraPosition.toCameraOptions(): CameraOptions {
     )
 }
 
+/**
+ * TomTom のカメラの縦方向の視野角（度）。SDK に取得 API は無い。地図の大きさによらず一定で、
+ * TB520FU の縦・横で 45° を実測した（焦点距離 ≈ 地図の高さ × 1.21）。
+ */
+internal const val TOMTOM_VERTICAL_FOV = 45.0
+
 fun MapCameraPosition.Companion.from(position: MapCameraPositionInterface): MapCameraPosition =
     when (position) {
         is MapCameraPosition -> position
@@ -81,6 +87,7 @@ fun MapCameraPosition.Companion.from(position: MapCameraPositionInterface): MapC
                 tilt = position.tilt,
                 paddings = position.paddings,
                 visibleRegion = position.visibleRegion,
+                fov = position.fov,
             )
     }
 

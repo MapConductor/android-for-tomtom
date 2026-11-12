@@ -8,6 +8,7 @@ public final class com.mapconductor.tomtom.GeoRectBoundsKt {
   public static final com.mapconductor.core.features.GeoRectBounds toGeoRectBounds(com.tomtom.sdk.location.GeoBoundingBox);
 }
 public final class com.mapconductor.tomtom.MapCameraPositionKt {
+  public static final double TOMTOM_VERTICAL_FOV;
   public static final com.tomtom.sdk.map.display.camera.CameraOptions toCameraOptions(com.mapconductor.core.map.MapCameraPosition);
   public static final com.mapconductor.core.map.MapCameraPosition from(com.mapconductor.core.map.MapCameraPosition$Companion, com.mapconductor.core.map.MapCameraPositionInterface);
   public static final com.mapconductor.core.map.MapCameraPosition toMapCameraPosition(com.tomtom.sdk.map.display.camera.CameraPosition, com.mapconductor.core.map.MapPaddingsInterface, java.lang.Double);
@@ -106,6 +107,8 @@ public final class com.mapconductor.tomtom.TomTomMapViewController extends com.m
 public final class com.mapconductor.tomtom.TomTomMapViewController$Companion {
 }
 public final class com.mapconductor.tomtom.TomTomMapViewControllerCameraKt {
+  public static final double viewportHeightDp(com.mapconductor.tomtom.TomTomMapViewController);
+  public static final com.mapconductor.core.map.MapCameraPosition toNativeCamera(com.mapconductor.tomtom.TomTomMapViewController, com.mapconductor.core.map.MapCameraPosition);
   public static final void handleMoveCamera(com.mapconductor.tomtom.TomTomMapViewController, com.mapconductor.core.map.MapCameraPosition);
   public static final void handleAnimateCamera(com.mapconductor.tomtom.TomTomMapViewController, com.mapconductor.core.map.MapCameraPosition, long);
   public static final void handleFitBounds(com.mapconductor.tomtom.TomTomMapViewController, com.mapconductor.core.features.GeoRectBounds, int);
