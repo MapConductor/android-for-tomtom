@@ -8,7 +8,10 @@ import com.mapconductor.core.features.GeoPointInterface
 import com.mapconductor.core.features.GeoRectBounds
 import com.mapconductor.core.groundimage.GroundImageState
 import com.mapconductor.core.groundimage.OnGroundImageEventHandler
+import com.mapconductor.core.map.CameraPaddingEmulation
 import com.mapconductor.core.map.MapCameraPosition
+import com.mapconductor.core.map.MapPaddings
+import com.mapconductor.core.map.MapPaddingsInterface
 import com.mapconductor.core.map.MapUISettings
 import com.mapconductor.core.marker.DefaultMarkerEventController
 import com.mapconductor.core.marker.MarkerAnimationOverlayHost
@@ -205,6 +208,15 @@ class TomTomMapViewController internal constructor(
     // 直近に要求した論理カメラ位置。tilt < 0 の擬似表現は SDK 側で正ピッチへ変換されるため、
     // カメラ状態の読み戻し時に元の負tilt を復元するヒントとして保持する（MapLibre と同方針）。
     internal var lastLogicalCameraPosition: MapCameraPosition? = null
+
+    /**
+     * 今カメラに付いているパディング（dp）。
+     *
+     * `MapController.setPadding` は使わない。付けた瞬間に画面がずれてアニメーションの
+     * 始まりが跳ぶため。代わりにカメラ中心をずらして再現し（[CameraPaddingEmulation]）、
+     * 読むときに元へ戻すためにここで覚えておく。
+     */
+    internal var cameraPaddings: MapPaddingsInterface = MapPaddings.Zeros
 
     override suspend fun clearOverlays() {
         markerController.clear()
