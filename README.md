@@ -312,6 +312,47 @@ fun GroundImageExample() {
   moving is treated as a click (`onClick`). The finger's screen coordinate is converted with
   `TomTomMap.coordinateForPoint`, and the marker is repositioned by updating `Marker.coordinate`.
 
+- **Map designs use the classic `StandardStyles.TomTomMaps.*`, not `TomTomOrbisMaps.*`**:
+  loading an Orbis descriptor (`tomtom://styles/standard/orbismap/browsing`) makes `loadStyle`
+  report `onSuccess()` while nothing is drawn — the map is left as a flat background colour.
+  Orbis vector maps require a separate entitlement on the API key; without it the failure is
+  silent rather than an error (`api.tomtom.com/maps/orbis/map-display/...` answers 400 while the
+  classic `api.tomtom.com/map/1/tile/basic/main/...` answers 200). Verified on a Pixel 5a with
+  map-display 2.4.x. Switch these back to `TomTomOrbisMaps.*` once an Orbis-entitled key is
+  available.
+- **★ The app must pin OkHttp to 4.x.** TomTom Orbis Maps SDK 2.4.x is built against OkHttp
+  4.x. With **OkHttp 5.x on the classpath, switching from the satellite (raster) style back to a
+  vector style leaves the map as a flat background colour** — `loadStyle` still reports
+  `onSuccess()`, `map.layers.size` still reports the full 137 layers, the camera is unchanged,
+  and no exception or HTTP error is logged. Panning does not recover it. Vector→vector
+  (Standard ⇄ Driving) is unaffected; only raster→vector breaks.
+
+  The trigger is transitive: ArcGIS Maps SDK for Kotlin 300.1.0 brings `okhttp 5.3.2`, and
+  Gradle's highest-version-wins resolution lifts TomTom's `4.12.0` to `5.3.2`. That is why the
+  symptom only ever appeared in apps hosting several map SDKs, and never in a TomTom-only app.
+
+  Verified both ways on a Pixel 5a with map-display 2.4.2, in a TomTom-only sample app:
+
+  | ArcGIS on the classpath | resolved OkHttp | satellite → standard |
+  |---|---|---|
+  | no  | 4.12.0 (default) | renders |
+  | no  | 5.3.2 (forced)   | **blank** |
+  | yes | 5.3.2 (default)  | **blank** |
+  | yes | 4.12.0 (pinned)  | renders |
+
+  A library cannot pin this for its consumers, so the app must do it:
+
+  ```kotlin
+  configurations.configureEach {
+      resolutionStrategy {
+          force("com.squareup.okhttp3:okhttp:4.12.0")
+      }
+  }
+  ```
+
+  `example-app/build.gradle.kts` and the React Native example carry exactly this. A report ready
+  to send to TomTom is in `docs/tomtom-okhttp5-raster-to-vector-report.md`.
+
 ## License
 
 Apache License 2.0

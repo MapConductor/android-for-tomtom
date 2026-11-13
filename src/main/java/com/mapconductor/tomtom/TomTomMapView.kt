@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.mapconductor.compose.map.MapViewBase
@@ -18,6 +19,7 @@ import com.mapconductor.core.map.MapCameraPosition
 import com.mapconductor.core.map.MapCameraPositionInterface
 import com.mapconductor.core.map.MapCapability
 import com.mapconductor.core.map.MapCapabilityStatus
+import com.mapconductor.core.map.MapViewStyle
 import com.mapconductor.core.map.MutableMapServiceRegistry
 import com.mapconductor.core.marker.MarkerEventControllerInterface
 import com.mapconductor.core.marker.MarkerOverlayRendererInterface
@@ -36,7 +38,9 @@ import com.mapconductor.tomtom.polygon.TomTomPolygonOverlayRenderer
 import com.mapconductor.tomtom.polyline.TomTomPolylineController
 import com.mapconductor.tomtom.polyline.TomTomPolylineOverlayRenderer
 import com.tomtom.sdk.map.display.MapOptions
+import com.tomtom.sdk.map.display.camera.InitialCameraOptions
 import com.tomtom.sdk.map.display.ui.MapView
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -54,6 +58,15 @@ fun TomTomMapView(
     onCameraMoveStart: OnCameraMoveHandler? = null,
     onCameraMove: OnCameraMoveHandler? = null,
     onCameraMoveEnd: OnCameraMoveHandler? = null,
+    /**
+     * How the map looks, when the app states it rather than naming a design.
+     *
+     * A vector style *is* the basemap. `com.mapconductor:vectorstyle` builds
+     * one; what happens underneath depends on this backend and the app does
+     * not have to know.
+     */
+    style: MapViewStyle? = null,
+    onStyleDiagnostics: ((List<String>) -> Unit)? = null,
     content: (@Composable TomTomMapViewScope.() -> Unit)? = null,
 ) {
     val scope = remember { TomTomMapViewScope() }
@@ -68,13 +81,36 @@ fun TomTomMapView(
     // 描画されない（View だけ出てタイルが出ない）。tmp の動作実装と同じ構成にする。
     val mapView =
         remember {
+            // 2.7 から初期カメラが必須。ここでは同じ地点の広域表示にしておき、目的のカメラは
+            // 下の post で moveCamera する。最初から目的のカメラを渡すと moveCamera がカメラを
+            // 変えず、TextureView 描画では最初の 1 枚が描かれないまま黒くなる（2.7.2 実測）。
             val options =
                 MapOptions(
                     mapKey = tomtomApiKey(context),
+                    initialCameraOptions =
+                        InitialCameraOptions.LocationBased(
+                            position = initialCameraPosition.position.toTomTomGeoPoint(),
+                            zoom = InitialCameraOptions.MIN_ZOOM,
+                        ),
                     // Compose の SubcomposeLayout 内に埋め込むため TextureView 描画にする。
                     renderToTexture = true,
                 )
             MapView(context, options).apply { onCreate(null) }
+        }
+
+    // 破棄は 1 回だけ。observer が進めた分（onResume / onStart）を巻き戻してから onDestroy。
+    // 設定変更では Activity 側で onPause / onStop が済んでいるので onDestroy だけになる。
+    val releaseMapView =
+        remember(mapView) {
+            val released = AtomicBoolean(false)
+
+            fun() {
+                if (!released.compareAndSet(false, true)) return
+                val current = lifecycle.currentState
+                if (current.isAtLeast(Lifecycle.State.RESUMED)) mapView.onPause()
+                if (current.isAtLeast(Lifecycle.State.STARTED)) mapView.onStop()
+                mapView.onDestroy()
+            }
         }
 
     // MapView のライフサイクルをホスト Activity のライフサイクルに同期させる。
@@ -102,7 +138,9 @@ fun TomTomMapView(
         lifecycle.addObserver(observer)
         onDispose {
             lifecycle.removeObserver(observer)
-            mapView.onDestroy()
+            // MapViewBase normally released it already (after the controller);
+            // this covers a map that left before MapViewBase took the view.
+            releaseMapView()
         }
     }
 
@@ -147,7 +185,6 @@ fun TomTomMapView(
                 }
                 mapController.setMapClickListener(onMapClick)
                 mapController.setMapLongClickListener(onMapLongClick)
-                mapController.setMapDesignTypeChangeListener(state::onMapDesignTypeChange)
                 cameraRestriction?.let { mapController.setCameraRestriction(it) }
                 // 大量マーカーをラスタタイル化するため、マーカータイル用ラスタレイヤーの
                 // 実体化（スタイル合成 + loadStyle）を配線する。
@@ -155,6 +192,17 @@ fun TomTomMapView(
                     apiKey = tomtomApiKey(context),
                     cacheDir = context.cacheDir,
                 )
+                // 地図は MapOptions の既定スタイル（= Standard）で作られる。state のデザインが
+                // それ以外なら載せる。そのあとでリスナーを繋ぐ: 先に繋ぐとコントローラの既定値
+                // （Standard）が state へ返り、アプリが渡した（あるいは回転後に復元した）
+                // デザインが Standard に化ける。
+                val initialDesign = state.mapDesignType
+                if (initialDesign === TomTomMapDesign.Standard) {
+                    mapController.mapDesignType = initialDesign
+                } else {
+                    mapController.setMapDesignType(initialDesign)
+                }
+                mapController.setMapDesignTypeChangeListener(state::onMapDesignTypeChange)
                 holder.mapView.post {
                     // Style loading can reset the camera, so reapply it once the view is attached.
                     mapController.moveCamera(initialCameraPosition)
@@ -165,6 +213,7 @@ fun TomTomMapView(
         scope = scope,
         registry = registry,
         onMapLoaded = onMapLoaded,
+        onDestroyMapView = { releaseMapView() },
         customDisposableEffect = { _, _ ->
             // MapView のライフサイクルは上の本体 DisposableEffect で駆動済み。
             // ここではコンポジション破棄時にコントローラを破棄してリークを防ぐ。
@@ -182,6 +231,8 @@ fun TomTomMapView(
             // 地図が生成されない）。初期化が必要なのは検索/ルーティング等のナビ機能のみ。
             sdkInitialize?.invoke(context) ?: true
         },
+        style = style,
+        onStyleDiagnostics = onStyleDiagnostics,
         content = content,
     )
 }

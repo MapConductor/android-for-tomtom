@@ -22,7 +22,11 @@ import com.mapconductor.core.tileserver.TileServerRegistry
 import com.mapconductor.tomtom.TomTomActualMarker
 import com.mapconductor.tomtom.TomTomMapViewHolder
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
@@ -143,11 +147,12 @@ internal class TomTomMarkerController private constructor(
         if (currentFinger == prevFinger) return
 
         semaphore.withPermit {
+            // 件数だけが要る。allEntities() は全件の写しを作るので、ラベルの付け替えのように
+            // 数十本が続けて変わると、そのたびに 14 万件を写すことになる。
             val tilingEnabled =
-                markerTiling.enabled && markerManager.allEntities().size >= markerManager.minMarkerCount
+                markerTiling.enabled && markerManager.getMemoryStats().entityCount >= markerManager.minMarkerCount
             val wantsTiled = tilingEnabled && !state.draggable && state.getAnimation() == null
             val wasTiled = tiledMarkerIds.contains(state.id)
-            val markerIcon = state.icon?.toBitmapIcon() ?: defaultMarkerIcon
 
             if (wantsTiled) {
                 if (!wasTiled) {
@@ -165,13 +170,15 @@ internal class TomTomMarkerController private constructor(
                         tiling = true,
                     ),
                 )
-                syncTiledOverlay()
+                scheduleTileRefresh()
                 return
             }
 
             if (wasTiled) {
                 tiledMarkerIds.remove(state.id)
             }
+            // ネイティブマーカーとして描くときだけ焼き込む。タイル担当なら要らない。
+            val markerIcon = state.icon?.toBitmapIcon() ?: defaultMarkerIcon
 
             val renderEntity =
                 MarkerEntity(
@@ -207,12 +214,31 @@ internal class TomTomMarkerController private constructor(
             renderer.onPostProcess()
 
             if (tiledMarkerIds.isNotEmpty()) {
-                syncTiledOverlay()
+                scheduleTileRefresh()
             } else {
                 removeTileOverlay()
             }
         }
         viewportSwitch.requestReapply()
+    }
+
+    private var tileRefreshJob: Job? = null
+
+    /**
+     * 1 本ずつの変更からの描き直しを 1 回にまとめる。
+     *
+     * ラベルの付け替えのように数十本が続けて変わると、1 本ごとにラスターソースを差し替え、
+     * そのたびに地図が見えているタイルを全部取り直していた（MapLibre・Pixel 5a で 45 回、
+     * 描き直したタイル 494 枚、最後のタイルまで 6 秒）。続けて来た変更は
+     * [TILE_REFRESH_COALESCE] の間に受けて、まとめて 1 回だけ差し替える。
+     */
+    private fun scheduleTileRefresh() {
+        if (tileRefreshJob?.isActive == true) return
+        tileRefreshJob =
+            (renderer as TomTomMarkerRenderer).coroutine.launch {
+                delay(TILE_REFRESH_COALESCE)
+                semaphore.withPermit { syncTiledOverlay() }
+            }
     }
 
     override suspend fun clear() {
@@ -251,6 +277,8 @@ internal class TomTomMarkerController private constructor(
 
     override fun destroy() {
         viewportSwitch.destroy()
+        // 待っている描き直しが後から走ると、外したタイル経路をまた登録してしまう。
+        tileRefreshJob?.cancel()
         // タイルサーバは他マップと共有のプロセス内シングルトンなので stop はしない。
         // このマップ用のルート登録だけ解除する。
         markerTileGroupId?.let { groupId -> tileServer.unregister(groupId) }
@@ -288,6 +316,7 @@ internal class TomTomMarkerController private constructor(
                 cacheSizeBytes = markerTiling.cacheSize,
                 debugTileOverlay = markerTiling.debugTileOverlay,
                 iconScaleCallback = markerTiling.iconScaleCallback,
+                declutterPx = markerTiling.declutterPx,
             )
         markerTileRenderer = tileRenderer
         tileServer.register(groupId, tileRenderer)
@@ -353,6 +382,9 @@ internal class TomTomMarkerController private constructor(
     }
 
     companion object {
+        /** 続けて来る変更を 1 回の描き直しにまとめる窓。1 フレーム分。 */
+        private val TILE_REFRESH_COALESCE = 16.milliseconds
+
         fun create(
             holder: TomTomMapViewHolder,
             markerTiling: MarkerTilingOptions = MarkerTilingOptions.Default,

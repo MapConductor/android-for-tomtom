@@ -1,5 +1,6 @@
 package com.mapconductor.tomtom.raster
 
+import com.mapconductor.core.map.BlankMapStyle
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -46,6 +47,13 @@ object TomTomStyleComposer {
     /** 可視ベースに使う TomTom ラスタ地図タイル（basic/main）テンプレート（%s = API キー）。 */
     private const val BASE_RASTER_TILES = "https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=%s"
 
+    /**
+     * The browsing style's skeleton, kept so a map with no network still has
+     * the SDK layers it insists on. Private cache only: the JSON carries the
+     * API key.
+     */
+    private const val BASE_STYLE_CACHE_FILE = "tomtom_base_style.json"
+
     private const val TILE_SIZE = 256
 
     /** 合成スタイルに載せる自前ラスタレイヤー1枚分の指定。 */
@@ -74,13 +82,59 @@ object TomTomStyleComposer {
         cacheDir: File,
         layers: List<RasterSpec>,
         outFile: File = File(cacheDir, "tomtom_composed_style.json"),
+        // [TomTomMapDesign.None]: ベースマップを描かない（本文のコメント参照）。
+        withoutBasemap: Boolean = false,
+    ): Uri? =
+        composeStackedRasterStyle(
+            apiKey = apiKey,
+            cacheDir = cacheDir,
+            belowOverlays = emptyList(),
+            aboveOverlays = layers,
+            outFile = outFile,
+            withoutBasemap = withoutBasemap,
+        )
+
+    /**
+     * [composeRasterStyle] の、重なり順を指定できる版。
+     *
+     * - [belowOverlays]: アプリのラスター（RasterLayerState）。重なり順の決まり
+     *   （ラスター < GroundImage < ポリゴン < サークル < ポリライン < マーカー）でいちばん下の帯なので、
+     *   SDK のオーバーレイ用レイヤー（polygon-shape など）とベースマップのラベルより**下**へ、
+     *   渡された順（下→上）に入れる。
+     * - [polylineTiles]: SDK 自身のポリラインのタイル（下→上）。スタイルの全レイヤー（ベースマップの
+     *   道路・ラベルも含む）の上、マーカーのタイルの下へ。TomTom のスタイルは最初の symbol の後ろにも
+     *   道路の line レイヤーが続くので、ラベルの前に入れると道路のタイルが地図の道路に覆われて見えなかった。
+     * - [aboveOverlays]: マーカーのタイル。マーカーの帯なのでスタイルの末尾（最前面）へ。
+     *
+     * 以前はどちらも末尾に積んでいたため、アプリのラスターがポリゴン・ポリライン・
+     * GroundImage（いずれも SDK のオーバーレイ）を覆っていた。
+     */
+    internal suspend fun composeStackedRasterStyle(
+        apiKey: String,
+        cacheDir: File,
+        belowOverlays: List<RasterSpec>,
+        aboveOverlays: List<RasterSpec>,
+        outFile: File,
+        withoutBasemap: Boolean,
+        polylineTiles: List<RasterSpec> = emptyList(),
     ): Uri? =
         withContext(Dispatchers.IO) {
+            // The SDK will not take a style that has none of its own layers
+            // (it reverts to its default), so every composed style is built
+            // on the browsing style's skeleton -- which lives on
+            // api.tomtom.com. Keeping the last copy on disk is what lets the
+            // map come up at all with no network: the skeleton is reused and
+            // only the raster layers on top, which are served from the
+            // device, are drawn.
+            val cachedBase = File(cacheDir, BASE_STYLE_CACHE_FILE)
             val baseJson =
-                fetch(String.format(BROWSING_STYLE_URL, apiKey)) ?: run {
-                    Log.e(TAG, "Failed to fetch base style JSON")
-                    return@withContext null
-                }
+                fetch(String.format(BROWSING_STYLE_URL, apiKey))
+                    ?.also { runCatching { cachedBase.writeText(it) } }
+                    ?: cachedBase.takeIf { it.isFile }?.let { runCatching { it.readText() }.getOrNull() }
+                    ?: run {
+                        Log.e(TAG, "Failed to fetch base style JSON and no cached copy")
+                        return@withContext null
+                    }
 
             val root =
                 try {
@@ -91,24 +145,76 @@ object TomTomStyleComposer {
                 }
 
             val sources = root.optJSONObject("sources") ?: JSONObject().also { root.put("sources", it) }
-            sources.put("mc-base-raster", rasterSource(String.format(BASE_RASTER_TILES, apiKey), TILE_SIZE, null, null))
-
             val styleLayers = root.optJSONArray("layers") ?: JSONArray().also { root.put("layers", it) }
-            // 可視ベース地図（ラスタ）は最下層付近（"background" の直後）に挿入し、
-            // ラベル/オーバーレイ/マーカーがその上に来るようにする。
-            val baseLayer = rasterLayer("mc-base-raster-layer", "mc-base-raster", 1.0)
-            val insertAt =
-                if (styleLayers.length() > 0 &&
-                    styleLayers.optJSONObject(0)?.optString("type") == "background"
-                ) {
-                    1
-                } else {
-                    0
+            if (withoutBasemap) {
+                // browsing スタイルを骨組みのまま残し（この SDK は自前のレイヤーを持たない
+                // スタイルを渡すと既定スタイルへ戻る）、background 以外の全レイヤーを
+                // 非表示にする。TomTom のタイルは取得されず、ラスタは背景色の上に載る。
+                // この SDK は読み込み後に自分のレイヤーの visibility を戻す（実測: 非表示だけでは
+                // ベースマップが残った。iOS 版はそれで消える）ので、不透明度も 0 にする。
+                for (i in 0 until styleLayers.length()) {
+                    val layer = styleLayers.optJSONObject(i) ?: continue
+                    val type = layer.optString("type")
+                    if (type == "background") {
+                        layer.put("paint", JSONObject().put("background-color", BlankMapStyle.BACKGROUND_COLOR))
+                        continue
+                    }
+                    val layout = layer.optJSONObject("layout") ?: JSONObject().also { layer.put("layout", it) }
+                    layout.put("visibility", "none")
+                    val paint = layer.optJSONObject("paint") ?: JSONObject().also { layer.put("paint", it) }
+                    when (type) {
+                        "fill" -> paint.put("fill-opacity", 0)
+                        "line" -> paint.put("line-opacity", 0)
+                        "symbol" -> {
+                            paint.put("text-opacity", 0)
+                            paint.put("icon-opacity", 0)
+                        }
+                        "raster" -> paint.put("raster-opacity", 0)
+                        "fill-extrusion" -> paint.put("fill-extrusion-opacity", 0)
+                        "circle" -> {
+                            paint.put("circle-opacity", 0)
+                            paint.put("circle-stroke-opacity", 0)
+                        }
+                        "heatmap" -> paint.put("heatmap-opacity", 0)
+                        "hillshade" -> paint.put("hillshade-exaggeration", 0)
+                    }
                 }
-            insertLayerAt(styleLayers, insertAt, baseLayer)
+            } else {
+                sources
+                    .put("mc-base-raster", rasterSource(String.format(BASE_RASTER_TILES, apiKey), TILE_SIZE, null, null))
 
-            // 自前ラスタレイヤー（マーカータイル / GroundImage など）を最前面（末尾）へ順に重ねる。
-            layers.forEachIndexed { index, spec ->
+                // 可視ベース地図（ラスタ）は最下層付近（"background" の直後）に挿入し、
+                // ラベル/オーバーレイ/マーカーがその上に来るようにする。
+                val baseLayer = rasterLayer("mc-base-raster-layer", "mc-base-raster", 1.0)
+                val insertAt =
+                    if (styleLayers.length() > 0 &&
+                        styleLayers.optJSONObject(0)?.optString("type") == "background"
+                    ) {
+                        1
+                    } else {
+                        0
+                    }
+                insertLayerAt(styleLayers, insertAt, baseLayer)
+            }
+
+            // アプリのラスター: SDK のオーバーレイ用レイヤーとラベルの下へ、渡された順に。
+            var insertBelow = overlayOrLabelIndex(styleLayers)
+            belowOverlays.forEachIndexed { index, spec ->
+                val sourceId = "mc-raster-src-$index"
+                sources.put(sourceId, rasterSource(spec.tilesUrl, spec.tileSize, spec.minZoom, spec.maxZoom))
+                insertLayerAt(styleLayers, insertBelow, rasterLayer("mc-raster-layer-$index", sourceId, spec.opacity))
+                insertBelow++
+            }
+            // ポリラインのタイル: ベースマップの全レイヤーの上へ順に。
+            polylineTiles.forEachIndexed { i, spec ->
+                val index = belowOverlays.size + i
+                val sourceId = "mc-raster-src-$index"
+                sources.put(sourceId, rasterSource(spec.tilesUrl, spec.tileSize, spec.minZoom, spec.maxZoom))
+                styleLayers.put(rasterLayer("mc-raster-layer-$index", sourceId, spec.opacity))
+            }
+            // マーカーのタイル: 最前面（末尾）へ順に重ねる。
+            aboveOverlays.forEachIndexed { i, spec ->
+                val index = belowOverlays.size + polylineTiles.size + i
                 val sourceId = "mc-raster-src-$index"
                 sources.put(sourceId, rasterSource(spec.tilesUrl, spec.tileSize, spec.minZoom, spec.maxZoom))
                 styleLayers.put(rasterLayer("mc-raster-layer-$index", sourceId, spec.opacity))
@@ -122,7 +228,8 @@ object TomTomStyleComposer {
             }
             Log.i(
                 TAG,
-                "Composed style written (${outFile.length()} bytes, ${styleLayers.length()} layers, ${layers.size} raster)",
+                "Composed style written (${outFile.length()} bytes, ${styleLayers.length()} layers, " +
+                    "${belowOverlays.size + polylineTiles.size + aboveOverlays.size} raster)",
             )
             Uri.fromFile(outFile)
         }
@@ -172,6 +279,22 @@ object TomTomStyleComposer {
             put("source", source)
             put("paint", JSONObject().put("raster-opacity", opacity))
         }
+
+    /**
+     * アプリのラスターを入れる位置: ベースマップのラベル（symbol）か SDK のオーバーレイ用レイヤー
+     * （polygon-shape / polyline-shape / circle-shape / marker / route など）のうち最初のもの。
+     * どちらも無ければ末尾。
+     */
+    private fun overlayOrLabelIndex(layers: JSONArray): Int {
+        for (i in 0 until layers.length()) {
+            val layer = layers.optJSONObject(i) ?: continue
+            val id = layer.optString("id")
+            if (layer.optString("type") == "symbol" || SDK_OVERLAY_LAYER_HINTS.any { id.contains(it) }) return i
+        }
+        return layers.length()
+    }
+
+    private val SDK_OVERLAY_LAYER_HINTS = listOf("shape", "marker", "route")
 
     /** JSONArray への位置指定挿入（org.json は insert が無いため末尾に足してからシフト）。 */
     private fun insertLayerAt(

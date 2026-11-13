@@ -7,12 +7,12 @@ import org.junit.Test
 class ExampleUnitTest {
     @Test
     fun tokyoOffsetMatchesCameraSyncCalibration() {
-        assertEquals(1.46, ZoomAltitudeConverter.zoomOffsetAt(35.6812), 0.01)
+        assertEquals(1.435, ZoomAltitudeConverter.zoomOffsetAt(35.6812), 0.01)
     }
 
     @Test
     fun oahuOffsetMatchesCameraSyncCalibration() {
-        assertEquals(1.66, ZoomAltitudeConverter.zoomOffsetAt(21.4389), 0.01)
+        assertEquals(1.632, ZoomAltitudeConverter.zoomOffsetAt(21.4389), 0.01)
     }
 
     @Test

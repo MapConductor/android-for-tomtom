@@ -1,6 +1,7 @@
 package com.mapconductor.tomtom
 
 import com.mapconductor.core.features.GeoPoint
+import com.mapconductor.core.map.CameraBearing
 import com.mapconductor.core.map.MapCameraPosition
 import com.mapconductor.core.map.MapCameraPositionInterface
 import com.mapconductor.core.map.MapPaddings
@@ -42,7 +43,7 @@ fun MapCameraPosition.toCameraOptions(): CameraOptions {
             position = GeoPoint.from(position).toTomTomGeoPoint(),
             zoom = ZoomAltitudeConverter.googleZoomToTomTomZoom(zoom, position.latitude),
             tilt = tilt.coerceIn(0.0, 60.0),
-            rotation = bearing.toTomTomRotation(),
+            rotation = CameraBearing.toNativeHeading(bearing).toTomTomRotation(),
         )
     }
 
@@ -58,16 +59,22 @@ fun MapCameraPosition.toCameraOptions(): CameraOptions {
             cos(tiltAbsRad) *
             tan(tiltAbsRad) *
             NEGATIVE_TILT_TARGET_DISTANCE_SCALE
-    val target = Spherical.computeOffset(position, distanceForward, bearing)
+    val target = Spherical.computeOffset(position, distanceForward, CameraBearing.toNativeHeading(bearing))
     val adjustedZoom = zoom + NEGATIVE_TILT_ZOOM_OFFSET_AT_MAX_TILT * (tiltAbsDeg / 60.0)
 
     return CameraOptions(
         position = target.toTomTomGeoPoint(),
         zoom = ZoomAltitudeConverter.googleZoomToTomTomZoom(adjustedZoom, target.latitude),
         tilt = tiltAbsDeg,
-        rotation = bearing.toTomTomRotation(),
+        rotation = CameraBearing.toNativeHeading(bearing).toTomTomRotation(),
     )
 }
+
+/**
+ * TomTom のカメラの縦方向の視野角（度）。SDK に取得 API は無い。地図の大きさによらず一定で、
+ * TB520FU の縦・横で 45° を実測した（焦点距離 ≈ 地図の高さ × 1.21）。
+ */
+internal const val TOMTOM_VERTICAL_FOV = 45.0
 
 fun MapCameraPosition.Companion.from(position: MapCameraPositionInterface): MapCameraPosition =
     when (position) {
@@ -80,6 +87,7 @@ fun MapCameraPosition.Companion.from(position: MapCameraPositionInterface): MapC
                 tilt = position.tilt,
                 paddings = position.paddings,
                 visibleRegion = position.visibleRegion,
+                fov = position.fov,
             )
     }
 
@@ -108,7 +116,7 @@ fun TomTomCameraPosition.toMapCameraPosition(
         return MapCameraPosition(
             position = corePosition,
             zoom = ZoomAltitudeConverter.tomtomZoomToGoogleZoom(zoom, position.latitude),
-            bearing = rotation,
+            bearing = CameraBearing.bearingFromNativeHeading(rotation),
             tilt = tilt,
             paddings = paddings,
             visibleRegion = null,
@@ -128,7 +136,7 @@ fun TomTomCameraPosition.toMapCameraPosition(
     return MapCameraPosition(
         position = originalPosition.copy(altitude = altitude),
         zoom = originalGoogleZoom,
-        bearing = rotation,
+        bearing = CameraBearing.bearingFromNativeHeading(rotation),
         tilt = -pitchAbsDeg,
         paddings = paddings,
         visibleRegion = null,

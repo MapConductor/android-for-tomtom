@@ -9,7 +9,9 @@ import com.mapconductor.core.map.MapCameraPosition
 import com.mapconductor.core.map.MapCameraPositionInterface
 import com.mapconductor.core.map.MapPaddings
 import com.mapconductor.core.map.MapViewState
+import com.mapconductor.core.map.MapViewStateBundle
 import com.mapconductor.core.map.MapViewStateInterface
+import com.tomtom.sdk.map.display.style.StyleDescriptor
 import java.util.UUID
 import android.os.Bundle
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,10 +38,13 @@ class TomTomMapViewState(
             this.controller?.setMapDesignType(value)
         }
         get() = _mapDesignType
-    private var controller: TomTomMapViewControllerInterface? = null
+
+    // Read through the base so that letting go of the controller there (MapViewBase
+    // does it when the map is torn down) leaves nothing behind here.
+    private val controller: TomTomMapViewControllerInterface?
+        get() = attachedMapController as? TomTomMapViewControllerInterface
 
     internal fun setController(controller: TomTomMapViewControllerInterface) {
-        this.controller = controller
         attachController(controller)
     }
 
@@ -61,7 +66,14 @@ class TomTomMapViewSaver : BaseMapViewSaver<TomTomMapViewState>() {
         state: TomTomMapViewState,
         bundle: Bundle,
     ) {
-        bundle.putString("id", state.mapDesignType.id)
+        val design = state.mapDesignType
+        bundle.putString("id", design.id)
+        // 定義済み（Standard など）以外は、地図に読み込ませる StyleDescriptor（Parcelable）ごと
+        // 保存して Custom で戻す。id だけだと Custom は Standard に化け、attributionRules も落ちる。
+        if (design is TomTomMapDesign && design !== TomTomMapDesign.create(design.id)) {
+            bundle.putParcelable(KEY_STYLE_DESCRIPTOR, design.styleDescriptor)
+        }
+        MapViewStateBundle.putAttributionRules(bundle, design.attributionRules)
     }
 
     override fun createState(
@@ -71,15 +83,29 @@ class TomTomMapViewSaver : BaseMapViewSaver<TomTomMapViewState>() {
     ): TomTomMapViewState =
         TomTomMapViewState(
             id = stateId,
-            mapDesignType =
-                TomTomMapDesign.create(
-                    id = mapDesignBundle?.getString("id") ?: TomTomMapDesign.Standard.id,
-                ),
+            mapDesignType = restoreDesign(mapDesignBundle),
             cameraPosition = cameraPosition,
         )
 
+    private fun restoreDesign(bundle: Bundle?): TomTomMapDesign {
+        val id = bundle?.getString("id") ?: return TomTomMapDesign.Standard
+        val rules = MapViewStateBundle.getAttributionRules(bundle)
+
+        @Suppress("DEPRECATION")
+        val descriptor = bundle.getParcelable<StyleDescriptor>(KEY_STYLE_DESCRIPTOR)
+        val preset = TomTomMapDesign.create(id)
+        return when {
+            descriptor != null -> TomTomMapDesign.Custom(id, descriptor, rules)
+            rules.isNotEmpty() -> TomTomMapDesign.Custom(id, preset.styleDescriptor, rules)
+            else -> preset
+        }
+    }
+
     override fun getStateId(state: TomTomMapViewState): String = state.id
 }
+
+// 公開 API の門番（javap）にコンパニオンの定数が載らないよう、ファイル private にする。
+private const val KEY_STYLE_DESCRIPTOR = "styleDescriptor"
 
 @Composable
 fun rememberTomTomMapViewState(

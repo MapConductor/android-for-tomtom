@@ -1,5 +1,11 @@
 package com.mapconductor.tomtom
 
+import com.mapconductor.core.circle.CIRCLE_TILE_LAYER_ID
+import com.mapconductor.core.circle.CircleTiler
+import com.mapconductor.core.polygon.POLYGON_TILE_LAYER_ID
+import com.mapconductor.core.polygon.PolygonTiler
+import com.mapconductor.core.polyline.POLYLINE_TILE_LAYER_ID
+import com.mapconductor.core.polyline.PolylineTiler
 import com.mapconductor.core.raster.RasterLayerSource
 import com.mapconductor.core.raster.RasterLayerState
 import com.mapconductor.tomtom.marker.MarkerTileRasterLayerCallback
@@ -46,6 +52,39 @@ fun TomTomMapViewController.setupMarkerTileRaster(
             upsertRasterLayer(TomTomMapViewController.MARKER_RASTER_ID, src.template, 1.0)
         },
     )
+    // Many polygons are drawn as raster tiles, composed into the style like the marker tiles.
+    // Not a public layer, so the app's RasterLayer composition never removes it.
+    polygonController.tiler =
+        PolygonTiler().apply {
+            onTemplate = { template, tileSize ->
+                if (template != null) {
+                    upsertRasterLayer(POLYGON_TILE_LAYER_ID, template, 1.0, tileSize, null, null)
+                } else {
+                    removeRasterLayer(POLYGON_TILE_LAYER_ID)
+                }
+            }
+        }
+    // Many polylines too, the same way (over the polygon tiles, under the SDK's overlays).
+    polylineController.tiler =
+        PolylineTiler().apply {
+            onTemplate = { template, tileSize ->
+                if (template != null) {
+                    upsertRasterLayer(POLYLINE_TILE_LAYER_ID, template, 1.0, tileSize, null, null)
+                } else {
+                    removeRasterLayer(POLYLINE_TILE_LAYER_ID)
+                }
+            }
+        }
+    circleController.tiler =
+        CircleTiler().apply {
+            onTemplate = { template, tileSize ->
+                if (template != null) {
+                    upsertRasterLayer(CIRCLE_TILE_LAYER_ID, template, 1.0, tileSize, null, null)
+                } else {
+                    removeRasterLayer(CIRCLE_TILE_LAYER_ID)
+                }
+            }
+        }
 }
 
 internal suspend fun TomTomMapViewController.applyPublicRasterLayer(state: RasterLayerState) {
@@ -54,6 +93,8 @@ internal suspend fun TomTomMapViewController.applyPublicRasterLayer(state: Raste
         removeRasterLayer(state.id)
         return
     }
+    // 帯の中の順（zIndex、同じなら渡された順）。合成のときに並べる。
+    composedRasterZIndex[state.id] = state.zIndex
     // ソースの tileSize / minZoom / maxZoom を合成スタイルへ伝える。maxZoom を渡すと
     // 高ズームでオーバーズーム表示され、実タイルの無い領域での歯抜けを防げる。
     upsertRasterLayer(
@@ -85,18 +126,35 @@ internal suspend fun TomTomMapViewController.applyComposedStyle() {
     if (destroyed) return
     val apiKey = rasterApiKey
     val cacheDir = rasterCacheDir
-    if (composedRasterLayers.isEmpty() || apiKey == null || cacheDir == null) {
+    // 「ベースマップ無し」自体が合成スタイル（合成器のコメント参照）なので、
+    // ラスタレイヤーが無くても None なら合成する。
+    val withoutBasemap = mapDesignType.id == TomTomMapDesign.None.id
+    if ((composedRasterLayers.isEmpty() && !withoutBasemap) || apiKey == null || cacheDir == null) {
         loadDesignStyle()
         return
     }
     composedStyleToggle = composedStyleToggle xor 1
     val outFile = File(cacheDir, "tomtom_composed_style_$composedStyleToggle.json")
+    // アプリのラスターはラスターの帯（ベースマップのラベルの下）、マーカーのタイルはマーカーの帯（最前面）。
+    // ポリゴンのタイルはアプリのラスターのすぐ上（ラベルの下）。ネイティブのサークル・ポリゴン
+    // （SDK のオーバーレイ）はその上に来る。ポリラインのタイルはベースマップの全レイヤー（道路・ラベル）の
+    // 上: TomTom のスタイルは最初のラベルの後ろにも道路の line が続くので、ラベルの前では道路のタイルが
+    // 地図の道路に覆われて見えなかった。ネイティブのサークルより上・マーカー（とそのタイル）より下になる
+    // （実機で確認。ポリゴンのタイルまで上へ上げるとサークルを覆ってしまう）。
+    val (markerTiles, others) =
+        composedRasterLayers.values.partition { it.id == TomTomMapViewController.MARKER_RASTER_ID }
+    val (polylineTiles, rest) = others.partition { it.id == POLYLINE_TILE_LAYER_ID }
+    val (circleTiles, remaining) = rest.partition { it.id == CIRCLE_TILE_LAYER_ID }
+    val (polygonTiles, appRasters) = remaining.partition { it.id == POLYGON_TILE_LAYER_ID }
     val uri =
-        TomTomStyleComposer.composeRasterStyle(
+        TomTomStyleComposer.composeStackedRasterStyle(
             apiKey = apiKey,
             cacheDir = cacheDir,
-            layers = composedRasterLayers.values.toList(),
+            belowOverlays = appRasters.sortedBy { composedRasterZIndex[it.id] ?: 0 } + polygonTiles + circleTiles,
+            aboveOverlays = markerTiles,
             outFile = outFile,
+            withoutBasemap = withoutBasemap,
+            polylineTiles = polylineTiles,
         ) ?: return
     if (destroyed) return
     withContext(Dispatchers.Main) {
@@ -136,3 +194,4 @@ internal fun TomTomMapViewController.styleLoadingCallback(tag: String) =
             android.util.Log.e("TomTomRaster", "loadStyle failed ($tag): $failure")
         }
     }
+
